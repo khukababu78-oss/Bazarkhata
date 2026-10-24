@@ -157,7 +157,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--line);color:var(--brand)}
 .seg3 button[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
 .spbody{display:flex;flex-direction:column;gap:12px}
 .pform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}
-.pform .pf_shop,.pform .mini{grid-column:1/-1}
+.pform .pf_shop,.pform .pf_cat,.pform .pf_catnew,.pform .mini{grid-column:1/-1}
 .pform .mini{min-height:44px}
 .payf{display:flex;gap:8px;width:100%}
 .bkf{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:8px}
@@ -174,6 +174,12 @@ tfoot td{font-weight:700;border-top:2px solid var(--line);color:var(--brand)}
 .pyhist{width:100%;margin-top:8px;font-size:13px;color:var(--mute)}
 .pyhist div{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px dashed var(--line)}
 .pyhist .void{text-decoration:line-through;opacity:.6}
+.srch{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.srch-res{border:1px solid var(--line);border-radius:12px;background:var(--card);max-height:260px;overflow-y:auto}
+.srch-it{display:block;width:100%;min-height:46px;padding:8px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:500 16px var(--body);text-align:left;cursor:pointer}
+.srch-it:last-child{border-bottom:0}
+.srch-it:active{background:var(--soft)}
+.srch-no{padding:12px 14px;color:var(--mute);font-size:14px}
 .vform{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:8px}
 .vform .vf_note,.vform .mini{grid-column:1/-1}
 .vform input,.vform select,.vform .mini{min-height:44px}
@@ -493,6 +499,11 @@ function mountApp(){
   var v=$('#view');
   v.addEventListener('click',onViewClick);
   v.addEventListener('submit',onViewSubmit);
+  v.addEventListener('change',function(ev){
+    var t=ev.target;
+    if(t.id==='pd_cat'){var w=$('#pd_cnw');if(w){w.hidden=t.value!=='__new';if(!w.hidden)$('#pd_catnew').focus()}}
+    else if(t.classList&&t.classList.contains('pf_cat')){var ni=t.parentNode.querySelector('.pf_catnew');if(ni){ni.hidden=t.value!=='__new';if(!ni.hidden)ni.focus()}}
+  });
   showTab(S.tab);
 }
 function showTab(k){
@@ -583,7 +594,9 @@ async function onViewSubmit(ev){
   if(pfm){
     ev.preventDefault();
     var ppr=parseFloat(pfm.querySelector('.pf_price').value);
-    try{await patch('products',pfm.dataset.pform,{price:ppr>=0?ppr:0,unit:pfm.querySelector('.pf_unit').value,shop:pfm.querySelector('.pf_shop').value});toast('প্রোডাক্ট সেভ হয়েছে')}
+    var ncat=catPick(pfm.querySelector('.pf_cat'),pfm.querySelector('.pf_catnew'));
+    if(!ncat){toast('নতুন ধরনের নাম লিখুন',true);return}
+    try{await patch('products',pfm.dataset.pform,{cat:ncat,price:ppr>=0?ppr:0,unit:pfm.querySelector('.pf_unit').value,shop:pfm.querySelector('.pf_shop').value});toast('প্রোডাক্ট সেভ হয়েছে')}
     catch(e){toast(errMsg(e),true)}
     return;
   }
@@ -663,11 +676,47 @@ async function onViewSubmit(ev){
 
 /* ---------- product and shop pickers ---------- */
 var CATS=['সবজি','মাছ','মাংস','মসলা','চাল-ডাল-তেল','দুধ-ডিম','অন্যান্য'];
+/* product types: the fixed list plus any type the owner typed for a product */
+function allCats(){
+  var extra=[];S.products.forEach(function(p){var c=p.cat;if(c&&CATS.indexOf(c)<0&&extra.indexOf(c)<0)extra.push(c)});
+  return CATS.slice(0,-1).concat(extra,[CATS[CATS.length-1]]);
+}
+function catOpts(sel,withNew){
+  var h=allCats().map(function(c){return '<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>'}).join('');
+  return h+(withNew?'<option value="__new">➕ নতুন ধরন যোগ করুন</option>':'');
+}
+function catPick(selEl,newEl){
+  if(selEl.value!=='__new')return selEl.value;
+  var n=newEl.value.trim();if(!n)return '';
+  var hit=allCats().filter(function(c){return c.toLowerCase()===n.toLowerCase()})[0];
+  return hit||n;
+}
 function r2(n){return Math.round(n*100)/100}
 function fillSelect(el,html){
   if(!el)return;
   var v=el.value;el.innerHTML=html;
   if(v&&Array.prototype.some.call(el.options,function(o){return o.value===v}))el.value=v;
+}
+/* type-to-search box above a long select */
+function makeSearch(sel){
+  if(!sel||sel.dataset.srch)return;sel.dataset.srch='1';
+  var box=document.createElement('div');box.className='srch';
+  box.innerHTML='<input class="srch-in" type="search" placeholder="নাম লিখে খুঁজুন" autocomplete="off" aria-label="খুঁজুন"><div class="srch-res" hidden></div>';
+  sel.parentNode.insertBefore(box,sel);
+  var inp=box.querySelector('input'),res=box.querySelector('.srch-res');
+  var found=function(){
+    var q=inp.value.trim().toLowerCase();if(!q)return null;
+    return Array.prototype.filter.call(sel.options,function(o){return o.value&&o.value!=='__other'&&o.textContent.toLowerCase().indexOf(q)>=0}).slice(0,30);
+  };
+  var pick=function(v){sel.value=v;sel.dispatchEvent(new Event('change'));inp.value='';res.hidden=true;res.innerHTML=''};
+  inp.addEventListener('input',function(){
+    var f=found();
+    if(!f){res.hidden=true;res.innerHTML='';return}
+    res.innerHTML=f.length?f.map(function(o){return '<button type="button" class="srch-it" data-v="'+esc(o.value)+'">'+esc(o.textContent)+'</button>'}).join(''):'<div class="srch-no">পাওয়া যায়নি। নিচের তালিকা থেকে "অন্য জিনিস" বেছে নিন।</div>';
+    res.hidden=false;
+  });
+  inp.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();var f=found();if(f&&f.length)pick(f[0].value)}});
+  res.addEventListener('click',function(ev){var b=ev.target.closest('[data-v]');if(b)pick(b.dataset.v)});
 }
 /* bought / not bought label for a product */
 function buyStatus(p){
@@ -687,7 +736,7 @@ function prodByName(n){var k=String(n||'').trim().toLowerCase();return S.product
 function prodOpts(){
   var by={};
   S.products.forEach(function(p){if(p.off)return;var c=p.cat||'অন্যান্য';(by[c]=by[c]||[]).push(p)});
-  var cats=CATS.concat(Object.keys(by).filter(function(c){return CATS.indexOf(c)<0}));
+  var cats=allCats().concat(Object.keys(by).filter(function(c){return allCats().indexOf(c)<0}));
   var h='<option value="">জিনিস বেছে নিন</option>';
   cats.forEach(function(c){
     if(!by[c])return;
@@ -762,7 +811,7 @@ function mountEntry(v){
 }
 function updEntry(){
   if(!$('#e_date'))return;
-  fillSelect($('#e_prod'),prodOpts());
+  fillSelect($('#e_prod'),prodOpts());makeSearch($('#e_prod'));
   var cs=$('#e_shop').value;
   fillSelect($('#e_shop'),shopOpts(cs));
   var owner=isMn(),date=$('#e_date').value||todayISO();
@@ -1242,7 +1291,7 @@ function mountSend(v){
 }
 function updSend(){
   if(!$('#dList')||!S.draft)return;
-  fillSelect($('#d_prod'),prodOpts());
+  fillSelect($('#d_prod'),prodOpts());makeSearch($('#d_prod'));
   $('#d_hint').hidden=S.products.length>0;
   var it=S.draft.items;
   $('#dCount').textContent=it.length+'টি';
@@ -1256,7 +1305,7 @@ function updSend(){
 function mountChefProd(v){
   v.innerHTML='<section class="card"><h2>নতুন প্রোডাক্ট</h2><p class="mute" style="font-size:14px">নতুন জিনিস বানালে এখানে যোগ করুন। দাম মালিক পরে ঠিক করবেন।</p><form id="cpf" autocomplete="off">'+
   '<div class="f"><label for="cp_name">নাম</label><input id="cp_name" placeholder="যেমন: পেঁয়াজ" required></div>'+
-  '<div class="f"><label for="cp_cat">ধরন</label><select id="cp_cat">'+CATS.map(function(c){return '<option>'+c+'</option>'}).join('')+'</select></div>'+
+  '<div class="f"><label for="cp_cat">ধরন</label><select id="cp_cat">'+catOpts('সবজি',false)+'</select></div>'+
   '<div class="f"><label for="cp_unit">একক</label><select id="cp_unit">'+UNITS.map(function(u){return '<option>'+u+'</option>'}).join('')+'</select></div>'+
   '<div class="f"><label for="cp_shop">সাধারণত কোন দোকান থেকে (ঐচ্ছিক)</label><select id="cp_shop"></select></div>'+
   '<button class="btn" type="submit">প্রোডাক্ট যোগ করুন</button></form></section>'+
@@ -1609,7 +1658,8 @@ function updShops(){
 function mountProducts(b){
   b.innerHTML='<section class="card"><h2>নতুন প্রোডাক্ট</h2><form id="pdf" autocomplete="off">'+
   '<div class="f"><label for="pd_name">নাম</label><input id="pd_name" placeholder="যেমন: পেঁয়াজ" required></div>'+
-  '<div class="f"><label for="pd_cat">ধরন</label><select id="pd_cat">'+CATS.map(function(c){return '<option>'+c+'</option>'}).join('')+'</select></div>'+
+  '<div class="f"><label for="pd_cat">ধরন</label><select id="pd_cat">'+catOpts('সবজি',true)+'</select></div>'+
+  '<div class="f" id="pd_cnw" hidden><label for="pd_catnew">নতুন ধরনের নাম</label><input id="pd_catnew" placeholder="যেমন: ফাস্টফুড, পানীয়"></div>'+
   '<div class="f"><label for="pd_price">দাম (৳) আর কোন এককে</label><div class="qty"><input id="pd_price" type="number" inputmode="decimal" step="any" min="0" placeholder="যেমন: 60"><select id="pd_unit" aria-label="একক">'+UNITS.map(function(u){return '<option>'+u+'</option>'}).join('')+'</select></div><span class="hint">যেমন: 60 টাকা প্রতি কেজি</span></div>'+
   '<div class="f"><label for="pd_shop">সাধারণত কোন দোকান থেকে</label><select id="pd_shop"></select><span class="hint" id="pdHint" hidden>আগে "দোকান" ট্যাবে দোকান বানালে এখানে বেছে নিতে পারবেন।</span></div>'+
   '<button class="btn" type="submit">প্রোডাক্ট যোগ করুন</button></form></section>'+
@@ -1619,20 +1669,23 @@ function mountProducts(b){
     var name=$('#pd_name').value.trim();if(!name)return;
     if(prodByName(name)){toast('এই নামে প্রোডাক্ট আগেই আছে',true);return}
     var price=parseFloat($('#pd_price').value);
+    var pcat=catPick($('#pd_cat'),$('#pd_catnew'));
+    if(!pcat){toast('নতুন ধরনের নাম লিখুন',true);return}
     try{
-      await put('products',Date.now().toString(36)+rnd().slice(0,4),{name:name,cat:$('#pd_cat').value,unit:$('#pd_unit').value,price:price>=0?price:0,shop:$('#pd_shop').value,ts:Date.now()});
-      $('#pd_name').value='';$('#pd_price').value='';$('#pd_name').focus();toast('প্রোডাক্ট যোগ হয়েছে');
+      await put('products',Date.now().toString(36)+rnd().slice(0,4),{name:name,cat:pcat,unit:$('#pd_unit').value,price:price>=0?price:0,shop:$('#pd_shop').value,ts:Date.now()});
+      $('#pd_name').value='';$('#pd_price').value='';$('#pd_catnew').value='';$('#pd_cat').value=pcat;$('#pd_cnw').hidden=true;$('#pd_name').focus();toast('প্রোডাক্ট যোগ হয়েছে');
     }catch(e){toast(errMsg(e),true)}
   });
 }
 function updProducts(){
   var l=$('#pdList');if(!l)return;
+  fillSelect($('#pd_cat'),catOpts('সবজি',true));
   fillSelect($('#pd_shop'),'<option value="">কোনো দোকান ঠিক নেই</option>'+S.shops.filter(function(s){return !s.off}).map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>'}).join(''));
   $('#pdHint').hidden=S.shops.length>0;
   $('#pdCount').textContent=S.products.length+'টি';
   if(!S.products.length){l.innerHTML='<p class="empty">এখনো কোনো প্রোডাক্ট নেই। উপরের ফর্মে প্রথমটা বানান। শেফ আর আপনি এখান থেকে বেছে নেবেন, লিখতে হবে না।</p>';return}
   var by={};S.products.forEach(function(p){var c=p.cat||'অন্যান্য';(by[c]=by[c]||[]).push(p)});
-  var cats=CATS.concat(Object.keys(by).filter(function(c){return CATS.indexOf(c)<0}));
+  var cats=allCats().concat(Object.keys(by).filter(function(c){return allCats().indexOf(c)<0}));
   var shopNames=S.shops.filter(function(s){return !s.off}).map(function(s){return s.name});
   var html='';
   cats.forEach(function(c){
@@ -1645,7 +1698,7 @@ function updProducts(){
       var bs=buyStatus(p);
       return '<li class="row" style="flex-wrap:wrap"><div class="r-main"><span class="r-item">'+esc(p.name)+(p.off?' · বন্ধ':'')+'</span><span class="r-sub">'+(+p.price>0?money(p.price)+' / '+esc(p.unit):'দাম লেখা নেই · '+esc(p.unit))+(p.shop?' · '+esc(p.shop):'')+(bs.sub?' · '+bs.sub:'')+'</span><span>'+bs.chip+'</span></div>'+
         (S.me.role==='owner'?'<div class="r-act"><button class="mini" type="button" data-pdtoggle="'+esc(p.id)+'">বদলান</button><button class="mini" type="button" data-poff="'+esc(p.id)+'">'+(p.off?'চালু করুন':'বন্ধ করুন')+'</button></div>':'')+
-        (S.me.role==='owner'?'<form class="pform" data-pform="'+esc(p.id)+'" hidden><input class="pf_price" type="number" inputmode="decimal" step="any" min="0" value="'+(+p.price||'')+'" aria-label="দাম"><select class="pf_unit" aria-label="একক">'+uo+'</select><select class="pf_shop" aria-label="দোকান">'+so+'</select><button class="mini" type="submit">সেভ করুন</button></form>':'')+'</li>';
+        (S.me.role==='owner'?'<form class="pform" data-pform="'+esc(p.id)+'" hidden><select class="pf_cat" aria-label="ধরন">'+catOpts(p.cat||'অন্যান্য',true)+'</select><input class="pf_catnew" placeholder="নতুন ধরনের নাম" hidden aria-label="নতুন ধরন"><input class="pf_price" type="number" inputmode="decimal" step="any" min="0" value="'+(+p.price||'')+'" aria-label="দাম"><select class="pf_unit" aria-label="একক">'+uo+'</select><select class="pf_shop" aria-label="দোকান">'+so+'</select><button class="mini" type="submit">সেভ করুন</button></form>':'')+'</li>';
     }).join('')+'</ul>';
   });
   l.innerHTML=html;
