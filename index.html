@@ -886,23 +886,62 @@ function mountKharch(v){
   v.innerHTML='<section class="card"><h2>বেতন ও অন্যান্য খরচ</h2><form id="xf" autocomplete="off">'+
   '<div class="f"><label for="x_date">তারিখ</label><input id="x_date" type="date" required></div>'+
   '<div class="f"><label for="x_cat">কিসের খরচ</label><select id="x_cat">'+xCatOpts('বেতন')+'</select></div>'+
-  '<div class="f"><label for="x_title" id="x_tl">কার বেতন</label><input id="x_title" list="x_names" placeholder="কর্মচারীর নাম" autocomplete="off"><datalist id="x_names"></datalist></div>'+
+  '<div class="f" id="x_stw" hidden><label for="x_staff">কর্মচারী</label><select id="x_staff"></select></div>'+
+  '<div class="f" id="x_kw" hidden><label for="x_kind">কী দিচ্ছেন</label><select id="x_kind"><option value="salary">বেতন</option><option value="advance">অগ্রিম</option><option value="bonus">বোনাস/ওভারটাইম</option></select></div>'+
+  '<div class="f" id="x_tw"><label for="x_title" id="x_tl">কার বেতন</label><input id="x_title" list="x_names" placeholder="কর্মচারীর নাম" autocomplete="off"><datalist id="x_names"></datalist></div>'+
   '<div class="f"><label for="x_amt">টাকা (৳)</label><input id="x_amt" type="number" inputmode="decimal" step="any" min="0" placeholder="যেমন: 12000" required></div>'+
   '<button class="btn" id="x_save" type="submit">খরচ সেভ করুন</button></form></section>'+
   '<section class="card"><div class="sec-h"><h2>মাসের হিসাব</h2><input id="x_m" type="month" aria-label="মাস" style="width:auto;max-width:170px;min-height:40px"></div><div class="stats" id="xStats"></div><p class="hint" id="xCats" style="margin-top:10px"></p></section>'+
   '<section class="card"><div class="sec-h"><h2>খরচের তালিকা</h2><span class="sum" id="xSum"></span></div><div id="xList"></div></section>';
   $('#x_date').value=todayISO();$('#x_m').value=S.xm;
-  var lab=function(){var sal=$('#x_cat').value==='বেতন';$('#x_tl').textContent=sal?'কার বেতন':'বিবরণ (না লিখলেও চলবে)';$('#x_title').placeholder=sal?'কর্মচারীর নাম':'যেমন: অক্টোবরের বিল'};
-  $('#x_cat').addEventListener('change',lab);
+  var useStaff=function(){return $('#x_cat').value==='বেতন'&&$('#x_stw')&&!$('#x_stw').hidden&&$('#x_staff').value!=='__other'};
+  var prefill=function(){
+    if(!useStaff()||$('#x_kind').value!=='salary')return;
+    var st=S.staff.filter(function(x){return x.id===$('#x_staff').value})[0],d=$('#x_date').value;
+    if(st&&d){var c=payCalc(st,d.slice(0,7));$('#x_amt').value=c.due>0?c.due:''}
+  };
+  var lab=function(){
+    var sal=$('#x_cat').value==='বেতন',d=$('#x_date').value||todayISO(),m=d.slice(0,7);
+    var list=sal?S.staff.filter(function(st){return staffActive(st,m)}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'bn')}):[];
+    var show=sal&&list.length>0;
+    $('#x_stw').hidden=!show;$('#x_kw').hidden=!show;
+    if(show)fillSelect($('#x_staff'),list.map(function(st){return '<option value="'+esc(st.id)+'">'+esc(st.name)+(st.post?' ('+esc(st.post)+')':'')+'</option>'}).join('')+'<option value="__other">অন্য কেউ (নিজে লিখব)</option>');
+    var typed=!show||$('#x_staff').value==='__other';
+    $('#x_tw').hidden=!typed;
+    $('#x_tl').textContent=sal?'কার বেতন':'বিবরণ (না লিখলেও চলবে)';$('#x_title').placeholder=sal?'কর্মচারীর নাম':'যেমন: অক্টোবরের বিল';
+  };
+  S.xLab=lab;
+  $('#x_cat').addEventListener('change',function(){lab();prefill()});
+  $('#x_date').addEventListener('change',function(){lab();prefill()});
+  $('#x_staff').addEventListener('change',function(){lab();prefill()});
+  $('#x_kind').addEventListener('change',prefill);
+  lab();
   $('#x_m').addEventListener('input',function(){if(this.value){S.xm=this.value;updKharch()}});
   var busy=false;
   $('#xf').addEventListener('submit',async function(ev){
     ev.preventDefault();if(busy)return;
     var cat=$('#x_cat').value,title=$('#x_title').value.trim(),amt=parseFloat($('#x_amt').value),date=$('#x_date').value;
-    if(cat==='বেতন'&&!title){toast('কার বেতন তা লিখুন',true);return}
+    var viaStaff=useStaff();
+    if(cat==='বেতন'&&!viaStaff&&!title){toast('কার বেতন তা লিখুন',true);return}
     if(!(amt>0)||!date){toast('তারিখ আর টাকা ঠিকভাবে দিন',true);return}
+    var st0=null,kind0='';
+    if(viaStaff){
+      st0=S.staff.filter(function(x){return x.id===$('#x_staff').value})[0];kind0=$('#x_kind').value;
+      if(!st0){toast('কর্মচারী বেছে নিন',true);return}
+      var c0=payCalc(st0,date.slice(0,7));
+      if(kind0==='salary'&&amt>c0.due+0.001){toast('বাকি বেতনের চেয়ে বেশি দেওয়া যাবে না। বাকি '+money(Math.max(0,c0.due)),true);return}
+    }
     busy=true;$('#x_save').disabled=true;
     try{
+      if(viaStaff){
+        var pid=Date.now().toString(36)+rnd().slice(0,4),now=Date.now(),mo=date.slice(0,7);
+        await multi([
+          {c:'pay',id:pid,d:{staffId:st0.id,staffName:st0.name,month:mo,kind:kind0,amount:amt,date:date,note:'',by:S.me.id,byName:S.me.name,ts:now}},
+          {c:'expenses',id:pid,d:{date:date,cat:'বেতন',title:st0.name+' · '+PKS[kind0],amount:amt,payId:pid,staffId:st0.id,month:mo,by:S.me.id,byName:S.me.name,ts:now}}
+        ]);
+        $('#x_amt').value='';S.xm=mo;$('#x_m').value=S.xm;toast('সেভ হয়েছে। বেতন ট্যাবেও দেখাবে');
+        busy=false;var sb0=$('#x_save');if(sb0)sb0.disabled=false;return;
+      }
       await put('expenses',Date.now().toString(36)+rnd().slice(0,4),{date:date,cat:cat,title:title,amount:amt,by:S.me.id,byName:S.me.name,ts:Date.now()});
       $('#x_title').value='';$('#x_amt').value='';
       S.xm=date.slice(0,7);$('#x_m').value=S.xm;
@@ -913,6 +952,7 @@ function mountKharch(v){
 }
 function updKharch(){
   if(!$('#xList'))return;
+  if(S.xLab)S.xLab();
   var m=S.xm,list=S.expenses.filter(function(x){return String(x.date).slice(0,7)===m}).sort(byNew);
   var sal=sum(list.filter(isSalary),function(x){return x.amount}),op=sum(list.filter(function(x){return !isSalary(x)}),function(x){return x.amount});
   $('#xStats').innerHTML='<div class="stat"><small>বেতন</small><b>'+money(sal)+'</b></div><div class="stat"><small>অন্যান্য খরচ</small><b>'+money(op)+'</b></div><div class="stat hl"><small>মোট</small><b>'+money(sal+op)+'</b></div>';
