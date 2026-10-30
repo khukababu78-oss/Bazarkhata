@@ -180,6 +180,22 @@ tfoot td{font-weight:700;border-top:2px solid var(--line);color:var(--brand)}
 .srch-it:last-child{border-bottom:0}
 .srch-it:active{background:var(--soft)}
 .srch-no{padding:12px 14px;color:var(--mute);font-size:14px}
+.itrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 48px;gap:6px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.itrow .it_n{grid-column:1/-1}
+.itrow input{min-height:44px;min-width:0}
+.bkf .itrow .mini,.itrow .mini{grid-column:auto;min-height:44px;min-width:0;padding:0}
+.ttl{display:flex;justify-content:space-between;font:700 17px var(--display);padding:6px 0}
+.bk{display:flex;flex-direction:column;gap:6px}
+.bk .bkh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.bk .bkitems{font-size:14px;color:var(--ink);margin:0;padding-left:0;list-style:none}
+.bk .bkitems li{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dashed var(--line)}
+.bk .bkm{font-size:14px;color:var(--mute)}
+.bkcalc{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px}
+.bkcalc span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.bkcalc .tot{font:700 16px var(--display);padding-top:4px;border-top:1px solid var(--line)}
+.bkf{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:8px}
+.bkf .wide,.bkf .mini,.bkf .itemsbox,.bkf .it_add,.bkf .hint{grid-column:1/-1}
+.bkf input,.bkf select,.bkf .mini{min-height:44px}
 .vform{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:8px}
 .vform .vf_note,.vform .mini{grid-column:1/-1}
 .vform input,.vform select,.vform .mini{min-height:44px}
@@ -244,7 +260,7 @@ function sum(a,f){return a.reduce(function(s,x){return s+(+f(x)||0)},0)}
 function uniq(a){var seen={},out=[];a.forEach(function(x){var k=String(x||'').trim();if(k&&!seen[k.toLowerCase()]){seen[k.toLowerCase()]=1;out.push(k)}});return out}
 var LS={get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}},del:function(k){try{localStorage.removeItem(k)}catch(e){}}};
 
-var S={me:null,users:{},entries:[],payments:[],expenses:[],sales:[],staff:[],pay:[],lists:[],products:[],shops:[],sp:'products',sel:null,draft:null,settings:null,got:{u:false,e:false,s:false,l:false,p:false,h:false,m:false,x:false,v:false},db:null,ready:false,tab:null,view:null,autoTried:false,r:null,dl:null,f:{from:'',to:'',q:'',pay:'',by:''}};
+var S={me:null,users:{},entries:[],payments:[],expenses:[],sales:[],staff:[],pay:[],bookings:[],bpay:[],lists:[],products:[],shops:[],sp:'products',sel:null,draft:null,settings:null,got:{u:false,e:false,s:false,l:false,p:false,h:false,m:false,x:false,v:false},db:null,ready:false,tab:null,view:null,autoTried:false,r:null,dl:null,f:{from:'',to:'',q:'',pay:'',by:''}};
 var app=$('#app'),cur=null,toastT=null;
 
 function toast(msg,bad){var t=$('#toast');t.textContent=msg;t.className='show'+(bad?' bad':'');clearTimeout(toastT);toastT=setTimeout(function(){t.className=''},3200)}
@@ -280,12 +296,12 @@ function stopAll(){unsubs.forEach(function(u){try{u()}catch(e){}});unsubs=[]}
 
 function subscribe(){
   stopAll();
-  S.got={u:false,e:false,s:false,l:false,p:false,h:false,m:false,x:false,v:false,t:false,y:false};
+  S.got={u:false,e:false,s:false,l:false,p:false,h:false,m:false,x:false,v:false,t:false,y:false,k:false,z:false};
   var owner=S.me.role==='owner',cash=S.me.role==='cashier';
   var watch=function(q,fn,flag){
     unsubs.push(q.onSnapshot(function(s){fn(s);S.got[flag]=true;onData()},function(){S.got[flag]=true;toast('ডেটা লোড করা যায়নি',true);onData()}));
   };
-  var arr=function(key,flag,q){watch(q,function(s){S[key]=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});if(key==='expenses')S[key]=S[key].filter(function(x){return !x.void})},flag)};
+  var arr=function(key,flag,q){watch(q,function(s){S[key]=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});if(key==='expenses'||key==='sales')S[key]=S[key].filter(function(x){return !x.void})},flag)};
   watch(S.db.doc('settings/main'),function(s){S.settings=s.exists?s.data():null},'s');
   if(owner||cash){
     if(owner){
@@ -301,9 +317,11 @@ function subscribe(){
     arr('sales','v',S.db.collection('sales').orderBy('date','desc').limit(1000));
     arr('staff','t',S.db.collection('staff').limit(300));
     arr('pay','y',S.db.collection('pay').orderBy('ts','desc').limit(3000));
+    arr('bookings','k',S.db.collection('bookings').limit(1500));
+    arr('bpay','z',S.db.collection('bpay').orderBy('ts','desc').limit(3000));
   }else{
     watch(S.db.doc('users/'+S.me.id),function(s){S.users={};if(s.exists)S.users[s.id]=s.data()},'u');
-    S.got.e=true;S.got.m=true;S.got.x=true;S.got.v=true;S.got.t=true;S.got.y=true;
+    S.got.e=true;S.got.m=true;S.got.x=true;S.got.v=true;S.got.t=true;S.got.y=true;S.got.k=true;S.got.z=true;
     arr('lists','l',S.db.collection('lists').where('by','==',S.me.id).limit(300));
   }
   arr('products','p',S.db.collection('products').limit(500));
@@ -313,7 +331,7 @@ function subscribe(){
 async function onAuth(user){
   if(S.creating)return;
   stopAll();
-  S.me=null;S.users={};S.entries=[];S.payments=[];S.expenses=[];S.sales=[];S.staff=[];S.pay=[];S.lists=[];S.products=[];S.shops=[];S.ready=false;
+  S.me=null;S.users={};S.entries=[];S.payments=[];S.expenses=[];S.sales=[];S.staff=[];S.pay=[];S.bookings=[];S.bpay=[];S.lists=[];S.products=[];S.shops=[];S.ready=false;
   if(!user){
     try{var st=await S.db.doc('settings/main').get();S.settings=st.exists?st.data():null;S.netErr=false}
     catch(e){S.netErr=true}
@@ -335,7 +353,7 @@ async function onAuth(user){
 }
 
 function onData(){
-  if(S.me&&S.got.u&&S.got.e&&S.got.s&&S.got.l&&S.got.p&&S.got.h&&S.got.m&&S.got.x&&S.got.v&&S.got.t&&S.got.y)S.ready=true;
+  if(S.me&&S.got.u&&S.got.e&&S.got.s&&S.got.l&&S.got.p&&S.got.h&&S.got.m&&S.got.x&&S.got.v&&S.got.t&&S.got.y&&S.got.k&&S.got.z)S.ready=true;
   if(S.me){
     var u=S.users[S.me.id];
     if(u){S.me.name=u.name;S.me.role=u.role;if(u.active===false){S.loginError='এই আইডি বন্ধ করা আছে।';logout();return}}
@@ -470,6 +488,7 @@ var IC={
   mine:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
   report:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
   payroll:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.2 2.7-5.5 6-5.5s6 2.3 6 5.5M17 9v6M14.5 11h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></svg>',
+  party:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15h6"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>'
 };
 var TABS={
@@ -485,11 +504,12 @@ var TABS={
   kharch:{t:'খরচ',mount:mountKharch,update:updKharch},
   payroll:{t:'বেতন',mount:mountPayroll,update:updPayroll},
   bikri:{t:'বিক্রি',mount:mountBikri,update:updBikri},
+  party:{t:'পার্টি',mount:mountParty,update:updParty},
   team:{t:'সেটআপ',mount:mountSetupTab,update:updSetup}
 };
 function mountApp(){
   var owner=S.me.role==='owner';
-  var keys=owner?['lists','entry','book','report','baki','kharch','payroll','bikri','hisab','team']:(S.me.role==='cashier'?['lists','entry','book','report','baki','kharch','payroll','bikri','hisab','team']:['send','prod','mine']);
+  var keys=owner?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:(S.me.role==='cashier'?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:['send','prod','mine']);
   if(keys.indexOf(S.tab)<0)S.tab=keys[0];
   app.innerHTML=topHTML(true)+(S.db?'':'<div class="banner"><div class="wrap"><p>এখানে ডেটা সেভ হচ্ছে না। পেজ বন্ধ করলে সব মুছে যাবে। সাইন ইন করা অবস্থায় খুলুন।</p></div></div>')+
     '<main class="wrap" id="view"></main><nav class="tabs" aria-label="মেনু"><div class="tabs-in wrap" id="tabs"></div></nav>';
@@ -1107,6 +1127,204 @@ function updPayroll(){
   L.innerHTML=(cards.join('')||'<section class="card"><p class="empty">'+(S.staff.length?'এই মাসে কোনো কর্মচারী নেই।':'এখনো কোনো কর্মচারী নেই। নিচের ফর্মে প্রথম কর্মচারী যোগ করুন।')+'</p></section>')+cl;
 }
 
+/* ---------- tab: party booking (owner, cashier) ---------- */
+var PTYPES=['জন্মদিন','বিয়ের অনুষ্ঠান','গায়ে হলুদ','অফিস পার্টি','পারিবারিক অনুষ্ঠান','অন্যান্য'];
+var PSTAT={booked:'বুকিং',confirmed:'নিশ্চিত',done:'শেষ হয়েছে',cancelled:'বাতিল'};
+function todayDiff(iso){var a=String(iso).split('-').map(Number),n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate()),d=new Date(a[0],a[1]-1,a[2]);return Math.round((d-t)/86400000)}
+function dLabel(iso){var n=todayDiff(iso);return n===0?'আজ':n===1?'কাল':n>1?n+' দিন পরে':(-n)+' দিন আগে'}
+function tLabel(t){if(!t)return '';var p=String(t).split(':'),h=+p[0],m=p[1]||'00',ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+m+' '+ap}
+function bkGross(b){return sum(b.items||[],function(i){return (+i.qty||0)*(+i.price||0)})}
+function bkTotal(b){return Math.max(0,r2(bkGross(b)-(+b.discount||0)))}
+function bkPaid(b){return r2(sum(S.bpay.filter(function(x){return x.bookingId===b.id&&!x.void}),function(x){return x.amount}))}
+function bkDue(b){return b.status==='cancelled'?0:r2(bkTotal(b)-bkPaid(b))}
+function itemRowHTML(i){
+  i=i||{};
+  return '<div class="itrow"><input class="it_n" list="it_names" placeholder="আইটেম, যেমন: কাচ্চি" value="'+esc(i.name||'')+'" aria-label="আইটেম"><input class="it_q" type="number" inputmode="decimal" step="any" min="0" placeholder="পরিমাণ" value="'+esc(i.qty!=null?i.qty:'')+'" aria-label="পরিমাণ"><input class="it_p" type="number" inputmode="decimal" step="any" min="0" placeholder="প্রতিটির দাম ৳" value="'+esc(i.price!=null?i.price:'')+'" aria-label="প্রতিটির দাম"><button class="mini it_x" type="button" aria-label="সরান">×</button></div>';
+}
+function itemsBoxHTML(items){
+  var rows=(items&&items.length?items:[{}]).map(itemRowHTML).join('');
+  return '<div class="itemsbox">'+rows+'</div><button class="mini it_add" type="button">+ আইটেম যোগ করুন</button><span class="hint wide">জনপ্রতি দাম হলে পরিমাণে অতিথির সংখ্যা লিখুন। দাম না জানলে ফাঁকা রাখুন।</span>';
+}
+function readItems(root){
+  var out=[];
+  root.querySelectorAll('.itrow').forEach(function(r){
+    var n=r.querySelector('.it_n').value.trim();if(!n)return;
+    var q=parseFloat(r.querySelector('.it_q').value),pr=parseFloat(r.querySelector('.it_p').value);
+    out.push({name:n,qty:q>0?q:1,price:pr>0?pr:0});
+  });
+  return out;
+}
+function wireItems(root){
+  var upd=function(el){
+    var f=el.closest('form');if(!f)return;
+    var t=f.querySelector('.f_ttl');if(!t)return;
+    var items=readItems(f),g=sum(items,function(i){return i.qty*i.price}),d=parseFloat((f.querySelector('.f_disc')||{}).value)||0;
+    t.textContent=money(Math.max(0,g-d));
+  };
+  root.addEventListener('click',function(ev){
+    var a=ev.target.closest('.it_add'),x=ev.target.closest('.it_x');
+    if(a){var box=a.parentNode.querySelector('.itemsbox');box.insertAdjacentHTML('beforeend',itemRowHTML());var ins=box.querySelectorAll('.it_n');ins[ins.length-1].focus()}
+    else if(x){var bx=x.closest('.itemsbox'),row=x.closest('.itrow');if(bx.querySelectorAll('.itrow').length>1)row.remove();else row.querySelectorAll('input').forEach(function(i){i.value=''});upd(bx)}
+  });
+  root.addEventListener('input',function(ev){if(ev.target.closest('.itrow')||ev.target.classList.contains('f_disc'))upd(ev.target)});
+}
+function mountParty(v){
+  if(!S.pf)S.pf='up';
+  v.innerHTML='<section class="card"><h2>নতুন পার্টি বুকিং</h2><form id="pbf" class="bkf" autocomplete="off">'+
+  '<div class="f wide"><label for="pb_name">কার নামে বুকিং</label><input id="pb_name" placeholder="যেমন: রহিম সাহেব" required></div>'+
+  '<div class="f"><label for="pb_phone">ফোন</label><input id="pb_phone" type="tel" inputmode="tel" placeholder="01XXXXXXXXX"></div>'+
+  '<div class="f"><label for="pb_guests">কত জন</label><input id="pb_guests" type="number" inputmode="numeric" min="1" placeholder="যেমন: 40" required></div>'+
+  '<div class="f"><label for="pb_date">তারিখ</label><input id="pb_date" type="date" required></div>'+
+  '<div class="f"><label for="pb_time">সময়</label><input id="pb_time" type="time" value="19:00"></div>'+
+  '<span class="hint wide" id="pb_clash" hidden></span>'+
+  '<div class="f wide"><label for="pb_type">অনুষ্ঠানের ধরন</label><select id="pb_type">'+PTYPES.map(function(t){return '<option>'+t+'</option>'}).join('')+'</select></div>'+
+  '<div class="f wide"><label>কী কী আইটেম</label></div>'+itemsBoxHTML()+
+  '<div class="f wide"><label for="pb_disc">ছাড় (৳) (না থাকলে ফাঁকা)</label><input id="pb_disc" class="f_disc" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div>'+
+  '<div class="ttl wide" style="grid-column:1/-1"><span>মোট বিল</span><span class="f_ttl">৳ 0</span></div>'+
+  '<div class="f"><label for="pb_adv">অগ্রিম পেয়েছেন (৳)</label><input id="pb_adv" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div>'+
+  '<div class="f"><label for="pb_mode">কীভাবে</label><select id="pb_mode">'+vModeOpts('cash')+'</select></div>'+
+  '<div class="f wide"><label for="pb_note">নোট (না লিখলেও চলবে)</label><input id="pb_note" placeholder="যেমন: কেক বাইরে থেকে আনবে, ছাদে বসবে"></div>'+
+  '<button class="btn wide" id="pb_save" type="submit" style="grid-column:1/-1">বুকিং সেভ করুন</button></form><datalist id="it_names"></datalist></section>'+
+  '<section class="card"><div class="sec-h"><h2>বুকিং তালিকা</h2><span class="sum" id="pbSum"></span></div>'+
+  '<div class="bkf"><select id="pb_f" aria-label="কোনগুলো দেখবেন"><option value="up">আসন্ন পার্টি</option><option value="all">সব বুকিং</option><option value="done">শেষ হয়েছে</option><option value="cancelled">বাতিল</option></select><input id="pb_q" type="search" placeholder="নাম বা ফোন খুঁজুন" aria-label="খুঁজুন"></div>'+
+  '<div class="stats" id="pbStats" style="margin-top:10px"></div></section>'+
+  '<div id="pbList" style="display:flex;flex-direction:column;gap:12px"></div>';
+  $('#pb_date').value=todayISO();$('#pb_f').value=S.pf;
+  wireItems($('#pbf'));
+  var clash=function(){
+    var d=$('#pb_date').value,el=$('#pb_clash');if(!d){el.hidden=true;return}
+    var n=S.bookings.filter(function(b){return b.date===d&&b.status!=='cancelled'}).length;
+    el.hidden=!n;el.textContent=n?'এই তারিখে আগে থেকেই '+n+'টি পার্টি বুক আছে।':'';
+  };
+  $('#pb_date').addEventListener('change',clash);S.pClash=clash;
+  $('#pb_f').addEventListener('change',function(){S.pf=this.value;updParty()});
+  $('#pb_q').addEventListener('input',updParty);
+  var busy=false;
+  $('#pbf').addEventListener('submit',async function(ev){
+    ev.preventDefault();if(busy)return;
+    var f=this,name=$('#pb_name').value.trim(),date=$('#pb_date').value,guests=parseInt($('#pb_guests').value,10);
+    var items=readItems(f),gross=sum(items,function(i){return i.qty*i.price}),disc=parseFloat($('#pb_disc').value)||0,adv=parseFloat($('#pb_adv').value)||0;
+    if(!name||!date||!(guests>0)){toast('নাম, তারিখ আর কত জন ঠিকভাবে দিন',true);return}
+    if(!items.length){toast('অন্তত একটা আইটেম লিখুন',true);return}
+    if(disc<0||disc>gross){toast('ছাড় মোট বিলের বেশি হতে পারে না',true);return}
+    var total=gross-disc;
+    if(adv<0||adv>total+0.001){toast('অগ্রিম মোট বিলের বেশি হতে পারে না। মোট '+money(total),true);return}
+    var id=Date.now().toString(36)+rnd().slice(0,4),now=Date.now();
+    var bk={name:name,phone:$('#pb_phone').value.trim(),date:date,time:$('#pb_time').value,guests:guests,type:$('#pb_type').value,items:items,discount:disc,note:$('#pb_note').value.trim(),status:'booked',by:S.me.id,byName:S.me.name,ts:now};
+    var ops=[{c:'bookings',id:id,d:bk}];
+    if(adv>0){
+      var pid=Date.now().toString(36)+rnd().slice(0,4),mode=$('#pb_mode').value,today=todayISO();
+      ops.push({c:'bpay',id:pid,d:{bookingId:id,bookingName:name,amount:adv,mode:mode,date:today,note:'অগ্রিম',by:S.me.id,byName:S.me.name,ts:now+1}});
+      ops.push({c:'sales',id:pid,d:{date:today,amount:adv,mode:mode,note:'পার্টি: '+name+' · অগ্রিম',bookingId:id,payId:pid,by:S.me.id,byName:S.me.name,ts:now+1}});
+    }
+    busy=true;$('#pb_save').disabled=true;
+    try{
+      await multi(ops);
+      f.reset();f.querySelector('.itemsbox').innerHTML=itemRowHTML();$('#pb_date').value=todayISO();$('#pb_time').value='19:00';f.querySelector('.f_ttl').textContent='৳ 0';clash();
+      S.pf='up';$('#pb_f').value='up';toast('বুকিং সেভ হয়েছে');
+    }catch(e){toast(errMsg(e),true)}
+    busy=false;var sb=$('#pb_save');if(sb)sb.disabled=false;
+  });
+  var L=$('#pbList');
+  wireItems(L);
+  L.addEventListener('click',async function(ev){
+    var b=ev.target.closest('[data-bopen],[data-bhist],[data-bedit],[data-bvoid]');if(!b)return;
+    try{
+      if(b.dataset.bopen){S.bOpen=S.bOpen===b.dataset.bopen?null:b.dataset.bopen;S.bEdit=null;updParty(true)}
+      else if(b.dataset.bhist){S.bHist=S.bHist===b.dataset.bhist?null:b.dataset.bhist;updParty(true)}
+      else if(b.dataset.bedit){S.bEdit=S.bEdit===b.dataset.bedit?null:b.dataset.bedit;S.bOpen=null;updParty(true)}
+      else if(b.dataset.bvoid){
+        if(!arm(b,'নিশ্চিত?'))return;
+        var vd={void:true,voidBy:S.me.name,voidOn:Date.now()};
+        await multi([{c:'bpay',id:b.dataset.bvoid,u:1,d:vd},{c:'sales',id:b.dataset.bvoid,u:1,d:vd}]);
+        toast('বাতিল করা হয়েছে (হিসাব থেকে বাদ)');
+      }
+    }catch(e){toast(errMsg(e),true)}
+  });
+  L.addEventListener('submit',async function(ev){
+    ev.preventDefault();
+    var pf=ev.target.closest('[data-bpform]'),ef=ev.target.closest('[data-beform]');
+    try{
+      if(pf){
+        var b=S.bookings.filter(function(x){return x.id===pf.dataset.bpform})[0];if(!b)return;
+        var amt=parseFloat(pf.querySelector('.bp_amt').value),date=pf.querySelector('.bp_date').value,mode=pf.querySelector('.bp_mode').value,note=pf.querySelector('.bp_note').value.trim();
+        if(b.status==='cancelled'){toast('বাতিল বুকিংয়ে টাকা নেওয়া যাবে না',true);return}
+        if(!(amt>0)||!date){toast('টাকা আর তারিখ ঠিকভাবে দিন',true);return}
+        var due=bkDue(b);
+        if(amt>due+0.001){toast('বাকির চেয়ে বেশি নেওয়া যাবে না। বাকি '+money(Math.max(0,due)),true);return}
+        var pid=Date.now().toString(36)+rnd().slice(0,4),now=Date.now();
+        await multi([
+          {c:'bpay',id:pid,d:{bookingId:b.id,bookingName:b.name,amount:amt,mode:mode,date:date,note:note,by:S.me.id,byName:S.me.name,ts:now}},
+          {c:'sales',id:pid,d:{date:date,amount:amt,mode:mode,note:'পার্টি: '+b.name+(note?' · '+note:''),bookingId:b.id,payId:pid,by:S.me.id,byName:S.me.name,ts:now}}
+        ]);
+        S.bOpen=null;toast('টাকা জমা হয়েছে। বিক্রিতেও যোগ হয়েছে');
+      }else if(ef){
+        var bk=S.bookings.filter(function(x){return x.id===ef.dataset.beform})[0];if(!bk)return;
+        var nm=ef.querySelector('.be_name').value.trim(),dt=ef.querySelector('.be_date').value,gs=parseInt(ef.querySelector('.be_guests').value,10);
+        var items=readItems(ef),gross=sum(items,function(i){return i.qty*i.price}),disc=parseFloat(ef.querySelector('.f_disc').value)||0;
+        if(!nm||!dt||!(gs>0)){toast('নাম, তারিখ আর কত জন ঠিকভাবে দিন',true);return}
+        if(!items.length){toast('অন্তত একটা আইটেম রাখুন',true);return}
+        if(disc<0||disc>gross){toast('ছাড় মোট বিলের বেশি হতে পারে না',true);return}
+        await patch('bookings',bk.id,{name:nm,phone:ef.querySelector('.be_phone').value.trim(),date:dt,time:ef.querySelector('.be_time').value,guests:gs,type:ef.querySelector('.be_type').value,items:items,discount:disc,note:ef.querySelector('.be_note').value.trim(),status:ef.querySelector('.be_status').value,edited:Date.now(),editedBy:S.me.name});
+        S.bEdit=null;toast('বদলানো হয়েছে');
+      }
+    }catch(e){toast(errMsg(e),true)}
+  });
+}
+function bkCardHTML(b){
+  var owner=S.me.role==='owner',tot=bkTotal(b),paid=bkPaid(b),due=bkDue(b);
+  var open=S.bOpen===b.id,hist=S.bHist===b.id,edit=S.bEdit===b.id;
+  var n=todayDiff(b.date),upcoming=b.status==='booked'||b.status==='confirmed';
+  var chip='<span class="chip '+(b.status==='cancelled'?'due':b.status==='done'?'paid':b.status==='confirmed'?'mobile':'')+'">'+PSTAT[b.status||'booked']+'</span>';
+  var when=dayLabel(b.date)+(b.time?' · '+tLabel(b.time):'')+(upcoming?' · '+dLabel(b.date):'');
+  var items='<ul class="bkitems">'+(b.items||[]).map(function(i){return '<li><span>'+esc(i.name)+' × '+qtyFmt(i.qty)+'</span><span>'+(i.price>0?money(i.qty*i.price):'')+'</span></li>'}).join('')+'</ul>';
+  var calc='<div class="bkcalc"><span>মোট বিল</span><span>'+money(bkGross(b))+'</span>'+((+b.discount>0)?'<span>− ছাড়</span><span>'+money(b.discount)+'</span><span>ছাড়ের পর</span><span>'+money(tot)+'</span>':'')+'<span>− পেয়েছেন</span><span>'+money(paid)+'</span><span class="tot">'+(b.status==='cancelled'?'বাতিল':'বাকি')+'</span><span class="tot">'+money(b.status==='cancelled'?0:due)+'</span></div>';
+  var pform=open?'<form class="bkf" data-bpform="'+esc(b.id)+'" autocomplete="off"><input class="bp_amt" type="number" inputmode="decimal" step="any" min="0" value="'+(due>0?due:'')+'" placeholder="টাকা ৳" aria-label="টাকা"><select class="bp_mode" aria-label="কীভাবে">'+vModeOpts('cash')+'</select><input class="bp_date" type="date" value="'+todayISO()+'" aria-label="তারিখ"><input class="bp_note" placeholder="নোট (না লিখলেও চলবে)" aria-label="নোট"><button class="mini" type="submit">টাকা জমা নিন</button></form>':'';
+  var eform='';
+  if(edit&&owner){
+    eform='<form class="bkf" data-beform="'+esc(b.id)+'" autocomplete="off">'+
+      '<input class="be_name wide" value="'+esc(b.name)+'" aria-label="নাম" style="grid-column:1/-1"><input class="be_phone" type="tel" value="'+esc(b.phone||'')+'" placeholder="ফোন" aria-label="ফোন"><input class="be_guests" type="number" inputmode="numeric" min="1" value="'+esc(b.guests)+'" aria-label="কত জন">'+
+      '<input class="be_date" type="date" value="'+esc(b.date)+'" aria-label="তারিখ"><input class="be_time" type="time" value="'+esc(b.time||'')+'" aria-label="সময়">'+
+      '<select class="be_type" aria-label="ধরন">'+PTYPES.map(function(t){return '<option'+(t===b.type?' selected':'')+'>'+t+'</option>'}).join('')+'</select>'+
+      '<select class="be_status" aria-label="অবস্থা">'+Object.keys(PSTAT).map(function(k){return '<option value="'+k+'"'+((b.status||'booked')===k?' selected':'')+'>'+PSTAT[k]+'</option>'}).join('')+'</select>'+
+      itemsBoxHTML(b.items)+
+      '<input class="f_disc" type="number" inputmode="decimal" step="any" min="0" value="'+(+b.discount||'')+'" placeholder="ছাড় ৳" aria-label="ছাড়" style="grid-column:1/-1">'+
+      '<div class="ttl" style="grid-column:1/-1"><span>মোট বিল</span><span class="f_ttl">'+money(tot)+'</span></div>'+
+      '<input class="be_note" value="'+esc(b.note||'')+'" placeholder="নোট" aria-label="নোট" style="grid-column:1/-1"><button class="mini" type="submit">সেভ করুন</button></form>';
+  }
+  var h='';
+  if(hist){
+    var rows=S.bpay.filter(function(x){return x.bookingId===b.id}).sort(function(a,c){return (c.ts||0)-(a.ts||0)});
+    h='<div class="pyhist">'+(rows.map(function(x){return '<div class="'+(x.void?'void':'')+'"><span>'+dayLabel(x.date)+' · '+esc(VMODES[x.mode]||x.mode)+(x.note?' · '+esc(x.note):'')+' · '+esc(x.byName||'')+(x.void?' · বাতিল':'')+'</span><span>'+money(x.amount)+(owner&&!x.void?' <button class="mini" type="button" data-bvoid="'+esc(x.id)+'">বাতিল</button>':'')+'</span></div>'}).join('')||'<div><span>এখনো কোনো টাকা নেওয়া হয়নি</span></div>')+'</div>';
+  }
+  var phone=b.phone?'<a href="tel:'+esc(b.phone)+'">'+esc(b.phone)+'</a>':'';
+  return '<section class="card bk"><div class="bkh"><div><h2 style="margin:0">'+esc(b.name)+'</h2><div class="bkm">'+when+'</div></div>'+chip+'</div>'+
+    '<div class="bkm">'+esc(b.type||'')+' · '+esc(b.guests)+' জন'+(phone?' · '+phone:'')+'</div>'+(b.note?'<div class="bkm">নোট: '+esc(b.note)+'</div>':'')+
+    items+calc+
+    '<div class="r-act" style="margin-top:6px;flex-wrap:wrap">'+(b.status!=='cancelled'&&due>0?'<button class="mini" type="button" data-bopen="'+esc(b.id)+'">'+(open?'বন্ধ করুন':'টাকা জমা নিন')+'</button>':'')+'<button class="mini" type="button" data-bhist="'+esc(b.id)+'">'+(hist?'হিসাব লুকান':'জমার হিসাব')+'</button>'+(owner?'<button class="mini" type="button" data-bedit="'+esc(b.id)+'">বদলান</button>':'')+'</div>'+pform+eform+h+'</section>';
+}
+function updParty(force){
+  var L=$('#pbList');if(!L)return;
+  var ae=document.activeElement;
+  if(!force&&ae&&L.contains(ae)&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName))return;
+  if(S.pClash)S.pClash();
+  var names=uniq([].concat.apply([],S.bookings.map(function(b){return (b.items||[]).map(function(i){return i.name})})));
+  var dl=$('#it_names');if(dl)dl.innerHTML=names.map(function(n){return '<option value="'+esc(n)+'"></option>'}).join('');
+  var f=S.pf,q=($('#pb_q').value||'').trim().toLowerCase();
+  var list=S.bookings.filter(function(b){
+    var st=b.status||'booked';
+    if(f==='up'&&!(st==='booked'||st==='confirmed'))return false;
+    if(f==='done'&&st!=='done')return false;
+    if(f==='cancelled'&&st!=='cancelled')return false;
+    if(q&&String(b.name).toLowerCase().indexOf(q)<0&&String(b.phone||'').indexOf(q)<0)return false;
+    return true;
+  }).sort(function(a,b){var A=a.date+' '+(a.time||''),B=b.date+' '+(b.time||'');return f==='up'?(A<B?-1:A>B?1:0):(A<B?1:A>B?-1:0)});
+  var tot=sum(list,bkTotal),paid=sum(list,function(b){return b.status==='cancelled'?0:bkPaid(b)}),due=sum(list,bkDue);
+  $('#pbSum').textContent=list.length+'টি';
+  $('#pbStats').innerHTML='<div class="stat hl"><small>মোট বিল</small><b>'+money(f==='cancelled'?0:sum(list.filter(function(b){return b.status!=='cancelled'}),bkTotal))+'</b></div><div class="stat"><small>পেয়েছেন</small><b>'+money(paid)+'</b></div><div class="stat"><small>বাকি আছে</small><b>'+money(due)+'</b></div>';
+  L.innerHTML=list.length?list.map(bkCardHTML).join(''):'<section class="card"><p class="empty">'+(f==='up'?'কোনো আসন্ন পার্টি বুকিং নেই। উপরের ফর্মে প্রথম বুকিং লিখুন।':'এখানে কিছু নেই।')+'</p></section>';
+}
+
 /* ---------- tab: bikri (owner, cashier) — sales ---------- */
 var VMODES={cash:'নগদ',mobile:'মোবাইল',card:'কার্ড'};
 function vModeOpts(sel){return Object.keys(VMODES).map(function(k){return '<option value="'+k+'"'+(k===sel?' selected':'')+'>'+VMODES[k]+'</option>'}).join('')}
@@ -1154,7 +1372,7 @@ function updBikri(){
       html+='<div class="grp"><span>'+dayLabel(d)+'</span><span>'+money(sum(day,function(y){return y.amount}))+'</span></div><ul class="rows">';
     }
     html+='<li class="row" style="flex-wrap:wrap"><div class="r-main"><span class="r-item">'+esc(VMODES[x.mode]||x.mode)+(x.note?' · '+esc(x.note):'')+'</span><span class="r-sub">'+esc(x.byName||'')+(x.edited?' · বদলানো':'')+'</span></div>'+
-      '<div class="r-end"><span class="amt">'+money(x.amount)+'</span><div class="r-act">'+(S.me.role==='owner'?'<button class="mini" type="button" data-vedit="'+esc(x.id)+'">বদলান</button>':'')+'</div></div>'+
+      '<div class="r-end"><span class="amt">'+money(x.amount)+'</span><div class="r-act">'+(S.me.role==='owner'&&!x.payId?'<button class="mini" type="button" data-vedit="'+esc(x.id)+'">বদলান</button>':'')+'</div></div>'+
       '<form class="vform" data-vform="'+esc(x.id)+'" hidden autocomplete="off"><input class="vf_date" type="date" value="'+esc(x.date)+'" aria-label="তারিখ"><select class="vf_mode" aria-label="কীভাবে">'+vModeOpts(x.mode)+'</select><input class="vf_amt" type="number" inputmode="decimal" step="any" min="0" value="'+esc(x.amount)+'" aria-label="টাকা"><input class="vf_note" value="'+esc(x.note||'')+'" placeholder="নোট" aria-label="নোট"><button class="mini" type="submit">সেভ করুন</button></form></li>';
   });
   $('#vList').innerHTML=html+'</ul>';
