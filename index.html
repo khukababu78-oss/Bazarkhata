@@ -321,7 +321,8 @@ function subscribe(){
     arr('bpay','z',S.db.collection('bpay').orderBy('ts','desc').limit(3000));
   }else{
     watch(S.db.doc('users/'+S.me.id),function(s){S.users={};if(s.exists)S.users[s.id]=s.data()},'u');
-    S.got.e=true;S.got.m=true;S.got.x=true;S.got.v=true;S.got.t=true;S.got.y=true;S.got.k=true;S.got.z=true;
+    S.got.e=true;S.got.m=true;S.got.x=true;S.got.v=true;S.got.t=true;S.got.y=true;S.got.z=true;
+    arr('bookings','k',S.db.collection('bookings').limit(1500));
     arr('lists','l',S.db.collection('lists').where('by','==',S.me.id).limit(300));
   }
   arr('products','p',S.db.collection('products').limit(500));
@@ -488,6 +489,7 @@ var IC={
   mine:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
   report:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
   payroll:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.2 2.7-5.5 6-5.5s6 2.3 6 5.5M17 9v6M14.5 11h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></svg>',
+  partyc:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15h6"/></svg>',
   party:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15h6"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>'
 };
@@ -505,11 +507,12 @@ var TABS={
   payroll:{t:'বেতন',mount:mountPayroll,update:updPayroll},
   bikri:{t:'বিক্রি',mount:mountBikri,update:updBikri},
   party:{t:'পার্টি',mount:mountParty,update:updParty},
+  partyc:{t:'পার্টি',mount:mountPartyC,update:updPartyC},
   team:{t:'সেটআপ',mount:mountSetupTab,update:updSetup}
 };
 function mountApp(){
   var owner=S.me.role==='owner';
-  var keys=owner?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:(S.me.role==='cashier'?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:['send','prod','mine']);
+  var keys=owner?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:(S.me.role==='cashier'?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:['send','prod','mine','partyc']);
   if(keys.indexOf(S.tab)<0)S.tab=keys[0];
   app.innerHTML=topHTML(true)+(S.db?'':'<div class="banner"><div class="wrap"><p>এখানে ডেটা সেভ হচ্ছে না। পেজ বন্ধ করলে সব মুছে যাবে। সাইন ইন করা অবস্থায় খুলুন।</p></div></div>')+
     '<main class="wrap" id="view"></main><nav class="tabs" aria-label="মেনু"><div class="tabs-in wrap" id="tabs"></div></nav>';
@@ -1125,6 +1128,35 @@ function updPayroll(){
   var cl=(owner&&closed.length)?'<section class="card"><h2>ছেড়ে যাওয়া</h2><ul class="rows">'+closed.map(function(st){return '<li class="row"><div class="r-main"><span class="r-item">'+esc(st.name)+'</span><span class="r-sub">'+esc(st.post||'')+(st.offMonth?' · '+mLabel(st.offMonth)+' পর্যন্ত':'')+'</span></div><div class="r-act"><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">চালু করুন</button></div></li>'}).join('')+'</ul></section>':'';
   $('#pyStats').innerHTML='<div class="stat hl"><small>মোট বেতন</small><b>'+money(tb)+'</b></div><div class="stat"><small>দেওয়া হয়েছে</small><b>'+money(tp)+'</b></div><div class="stat"><small>বাকি</small><b>'+money(td)+'</b></div><div class="stat"><small>বোনাস/ওভারটাইম</small><b>'+money(tbo)+'</b></div>';
   L.innerHTML=(cards.join('')||'<section class="card"><p class="empty">'+(S.staff.length?'এই মাসে কোনো কর্মচারী নেই।':'এখনো কোনো কর্মচারী নেই। নিচের ফর্মে প্রথম কর্মচারী যোগ করুন।')+'</p></section>')+cl;
+}
+
+/* ---------- chef: party bookings, read only, no prices or payments ---------- */
+function mountPartyC(v){
+  if(!S.pcf)S.pcf='up';
+  v.innerHTML='<section class="card"><div class="sec-h"><h2>পার্টি বুকিং</h2><span class="sum" id="pcSum"></span></div><p class="mute" style="font-size:14px">কোন দিন কী কী আইটেম লাগবে এখানে দেখা যাবে। এখানে কিছু বদলানো যায় না।</p>'+
+  '<div class="bkf"><select id="pc_f" aria-label="কোনগুলো দেখবেন" style="grid-column:1/-1"><option value="up">আসন্ন পার্টি</option><option value="past">আগের পার্টি</option></select></div></section>'+
+  '<div id="pcList" style="display:flex;flex-direction:column;gap:12px"></div>';
+  $('#pc_f').value=S.pcf;
+  $('#pc_f').addEventListener('change',function(){S.pcf=this.value;updPartyC()});
+}
+function updPartyC(){
+  var L=$('#pcList');if(!L)return;
+  var f=S.pcf||'up';
+  var live=function(b){return (b.status==='booked'||b.status==='confirmed')&&todayDiff(b.date)>=0};
+  var list=S.bookings.filter(function(b){return f==='up'?live(b):!live(b)});
+  list.sort(function(a,b){var c=(a.date>b.date?1:a.date<b.date?-1:0)||String(a.time||'').localeCompare(String(b.time||''));return f==='up'?c:-c});
+  $('#pcSum').textContent=list.length+'টি';
+  L.innerHTML=list.length?list.map(function(b){
+    var up=live(b);
+    var chip='<span class="chip '+(b.status==='cancelled'?'due':b.status==='done'?'paid':b.status==='confirmed'?'mobile':'')+'">'+PSTAT[b.status||'booked']+'</span>';
+    var when=dayLabel(b.date)+(b.time?' · '+tLabel(b.time):'')+(up?' · '+dLabel(b.date):'');
+    var items=(b.items||[]).map(function(i){return '<li><span>'+esc(i.name)+' × '+qtyFmt(i.qty)+'</span></li>'}).join('');
+    return '<section class="card"><div class="sec-h"><h2>'+esc(b.name)+'</h2>'+chip+'</div>'+
+      '<p class="r-sub" style="margin:0">'+when+'</p>'+
+      '<p class="r-sub" style="margin:2px 0 0">'+esc(b.type||'')+(b.guests?' · '+esc(b.guests)+' জন':'')+'</p>'+
+      '<ul class="bkitems" style="margin-top:8px">'+(items||'<li><span>আইটেম লেখা হয়নি</span></li>')+'</ul>'+
+      (b.note?'<p class="r-sub" style="margin:8px 0 0">নোট: '+esc(b.note)+'</p>':'')+'</section>';
+  }).join(''):'<section class="card"><p class="empty">'+(f==='up'?'কোনো আসন্ন পার্টি বুকিং নেই।':'আগের কোনো পার্টি নেই।')+'</p></section>';
 }
 
 /* ---------- tab: party booking (owner, cashier) ---------- */
