@@ -737,13 +737,13 @@ function prodOpts(){
   var by={};
   S.products.forEach(function(p){if(p.off)return;var c=p.cat||'অন্যান্য';(by[c]=by[c]||[]).push(p)});
   var cats=allCats().concat(Object.keys(by).filter(function(c){return allCats().indexOf(c)<0}));
-  var h='<option value="">জিনিস বেছে নিন</option>';
+  var h='<option value="">জিনিস বেছে নিন</option><option value="__other">➕ অন্য জিনিস (নিজে লিখব)</option>';
   cats.forEach(function(c){
     if(!by[c])return;
     by[c].sort(function(a,b){return String(a.name).localeCompare(String(b.name),'bn')});
     h+='<optgroup label="'+esc(c)+'">'+by[c].map(function(p){return '<option value="'+esc(p.id)+'">'+esc(p.name)+' ('+esc(p.unit)+')</option>'}).join('')+'</optgroup>';
   });
-  return h+'<option value="__other">অন্য জিনিস (নিজে লিখব)</option>';
+  return h;
 }
 function shopOpts(extra){
   var names=S.shops.filter(function(s){return !s.off}).map(function(s){return s.name}).sort(function(a,b){return String(a).localeCompare(String(b),'bn')});
