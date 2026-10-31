@@ -1037,11 +1037,17 @@ function mountPayroll(v){
   });
   var L=$('#pyList');
   L.addEventListener('click',async function(ev){
-    var b=ev.target.closest('[data-pyopen],[data-pyhist],[data-pyvoid],[data-pyedit],[data-pyoff]');if(!b)return;
+    var b=ev.target.closest('[data-pyopen],[data-pyhist],[data-pyvoid],[data-pyedit],[data-pyoff],[data-pydel]');if(!b)return;
     try{
       if(b.dataset.pyopen){S.payOpen=S.payOpen===b.dataset.pyopen?null:b.dataset.pyopen;S.payEdit=null;updPayroll()}
       else if(b.dataset.pyhist){S.payHist=S.payHist===b.dataset.pyhist?null:b.dataset.pyhist;updPayroll()}
       else if(b.dataset.pyedit){S.payEdit=S.payEdit===b.dataset.pyedit?null:b.dataset.pyedit;S.payOpen=null;updPayroll()}
+      else if(b.dataset.pydel){
+        if(S.me.role!=='owner')return;
+        var dn=S.staff.filter(function(x){return x.id===b.dataset.pydel})[0];if(!dn)return;
+        if(!arm(b,'পুরোপুরি মুছবেন?'))return;
+        await S.db.doc('staff/'+dn.id).delete();S.payEdit=null;S.payOpen=null;toast('কর্মচারী মুছে ফেলা হয়েছে');updPayroll();
+      }
       else if(b.dataset.pyoff){
         var st=S.staff.filter(function(x){return x.id===b.dataset.pyoff})[0];if(!st)return;
         if(!st.off){if(!arm(b,'নিশ্চিত?'))return;await patch('staff',st.id,{off:true,offMonth:S.pm});toast('বন্ধ করা হয়েছে। '+mLabel(S.pm)+' পর্যন্ত বেতন দেখাবে')}
@@ -1121,11 +1127,11 @@ function updPayroll(){
     var sub=[st.post?esc(st.post):'',st.off?'বন্ধ':''].filter(Boolean).join(' · ');
     return '<section class="card"><div class="sec-h"><h2>'+esc(st.name)+'</h2>'+chip+'</div>'+(sub?'<p class="r-sub" style="margin:0">'+sub+'</p>':'')+calc+
       '<div class="r-act" style="margin-top:10px;flex-wrap:wrap"><button class="mini" type="button" data-pyopen="'+esc(st.id)+'">'+(open?'বন্ধ করুন':'টাকা লিখুন')+'</button><button class="mini" type="button" data-pyhist="'+esc(st.id)+'">'+(hist?'হিসাব লুকান':'হিসাব দেখুন')+'</button>'+
-      (owner?'<button class="mini" type="button" data-pyedit="'+esc(st.id)+'">বদলান</button><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">'+(st.off?'চালু করুন':'ছেড়ে গেছে')+'</button>':'')+'</div>'+form+eform+h+'</section>';
+      (owner?'<button class="mini" type="button" data-pyedit="'+esc(st.id)+'">বদলান</button><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">'+(st.off?'চালু করুন':'ছেড়ে গেছে')+'</button><button class="mini" type="button" data-pydel="'+esc(st.id)+'">মুছুন</button>':'')+'</div>'+form+eform+h+'</section>';
   });
   // staff that are inactive this month but closed: allow reopening
   var closed=S.staff.filter(function(st){return !staffActive(st,m)&&st.off}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'bn')});
-  var cl=(owner&&closed.length)?'<section class="card"><h2>ছেড়ে যাওয়া</h2><ul class="rows">'+closed.map(function(st){return '<li class="row"><div class="r-main"><span class="r-item">'+esc(st.name)+'</span><span class="r-sub">'+esc(st.post||'')+(st.offMonth?' · '+mLabel(st.offMonth)+' পর্যন্ত':'')+'</span></div><div class="r-act"><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">চালু করুন</button></div></li>'}).join('')+'</ul></section>':'';
+  var cl=(owner&&closed.length)?'<section class="card"><h2>ছেড়ে যাওয়া</h2><ul class="rows">'+closed.map(function(st){return '<li class="row"><div class="r-main"><span class="r-item">'+esc(st.name)+'</span><span class="r-sub">'+esc(st.post||'')+(st.offMonth?' · '+mLabel(st.offMonth)+' পর্যন্ত':'')+'</span></div><div class="r-act"><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">চালু করুন</button><button class="mini" type="button" data-pydel="'+esc(st.id)+'">মুছুন</button></div></li>'}).join('')+'</ul></section>':'';
   $('#pyStats').innerHTML='<div class="stat hl"><small>মোট বেতন</small><b>'+money(tb)+'</b></div><div class="stat"><small>দেওয়া হয়েছে</small><b>'+money(tp)+'</b></div><div class="stat"><small>বাকি</small><b>'+money(td)+'</b></div><div class="stat"><small>বোনাস/ওভারটাইম</small><b>'+money(tbo)+'</b></div>';
   L.innerHTML=(cards.join('')||'<section class="card"><p class="empty">'+(S.staff.length?'এই মাসে কোনো কর্মচারী নেই।':'এখনো কোনো কর্মচারী নেই। নিচের ফর্মে প্রথম কর্মচারী যোগ করুন।')+'</p></section>')+cl;
 }
