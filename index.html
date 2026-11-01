@@ -132,6 +132,10 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 #toast.bad{background:var(--bad);color:#fff}
 .auth{padding-top:20px;padding-bottom:40px}
 .auth .card{display:flex;flex-direction:column;gap:6px}
+.noadd #ef,.noadd #xf,.noadd #stf,.noadd #pbf,.noadd #vf,.noadd #shf,.noadd #pdf{display:none}
+.rolebox{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:6px 0 12px}
+.permbox{width:100%;margin-top:10px;padding:12px;border:1px solid var(--line,#d8ddd9);border-radius:12px;display:grid;gap:8px}.permbox b{font-size:14px}.rolebox label{display:flex;gap:8px;align-items:center;font-size:15px}.rolebox input{width:auto;min-height:0}
+.urow select{min-height:40px;max-width:200px}
 .urow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
 .urow:first-child{border-top:0}
 .urow .uinfo{display:flex;flex-direction:column;min-width:0}
@@ -306,6 +310,7 @@ function subscribe(){
   if(owner||cash){
     if(owner){
       watch(S.db.collection('users'),function(s){S.users={};s.docs.forEach(function(d){S.users[d.id]=d.data()})},'u');
+      unsubs.push(S.db.collection('roles').onSnapshot(function(q){S.roles=q.docs.map(function(d){return Object.assign({id:d.id},d.data())});try{if(S.tab==='team'&&S.sp==='team'&&$('#uList'))updTeam()}catch(e){}},function(){}));
       arr('lists','l',S.db.collection('lists').orderBy('ts','desc').limit(300));
     }else{
       watch(S.db.doc('users/'+S.me.id),function(s){S.users={};if(s.exists)S.users[s.id]=s.data()},'u');
@@ -332,7 +337,7 @@ function subscribe(){
 async function onAuth(user){
   if(S.creating)return;
   stopAll();
-  S.me=null;S.users={};S.entries=[];S.payments=[];S.expenses=[];S.sales=[];S.staff=[];S.pay=[];S.bookings=[];S.bpay=[];S.lists=[];S.products=[];S.shops=[];S.ready=false;
+  S.me=null;S.users={};S.roles=[];S.entries=[];S.payments=[];S.expenses=[];S.sales=[];S.staff=[];S.pay=[];S.bookings=[];S.bpay=[];S.lists=[];S.products=[];S.shops=[];S.ready=false;
   if(!user){
     try{var st=await S.db.doc('settings/main').get();S.settings=st.exists?st.data():null;S.netErr=false}
     catch(e){S.netErr=true}
@@ -347,7 +352,7 @@ async function onAuth(user){
     }
     var st2=await S.db.doc('settings/main').get();
     S.settings=st2.exists?st2.data():null;
-    S.me={id:user.uid,loginId:u.loginId,name:u.name,role:u.role};
+    S.me={id:user.uid,loginId:u.loginId};applyPerm(S.me,u);
     S.netErr=false;
     subscribe();
   }catch(e){S.netErr=true;S.ready=true;route()}
@@ -357,7 +362,7 @@ function onData(){
   if(S.me&&S.got.u&&S.got.e&&S.got.s&&S.got.l&&S.got.p&&S.got.h&&S.got.m&&S.got.x&&S.got.v&&S.got.t&&S.got.y&&S.got.k&&S.got.z)S.ready=true;
   if(S.me){
     var u=S.users[S.me.id];
-    if(u){S.me.name=u.name;S.me.role=u.role;if(u.active===false){S.loginError='এই আইডি বন্ধ করা আছে।';logout();return}}
+    if(u){applyPerm(S.me,u);if(u.active===false){S.loginError='এই আইডি বন্ধ করা আছে।';logout();return}}
   }
   route();
 }
@@ -402,8 +407,11 @@ function route(){
   else if(k.indexOf('app')===0)updApp();
 }
 function rname(){return (S.settings&&S.settings.name)||'বাজার খাতা'}
+function canEd(){return !!S.me&&(S.me.role==='owner'||(S.me.role==='cashier'&&S.me.pEdit===true))}
+function canAdd(){return !!S.me&&(S.me.role==='owner'||S.me.pAdd!==false)}
+function applyPerm(me,u){me.name=u.name;me.role=u.role;me.pTabs=Array.isArray(u.pTabs)?u.pTabs:null;me.pAdd=u.pAdd!==false;me.pEdit=u.pEdit===true;me.roleName=u.roleName||''}
 function isMn(){return !!S.me&&(S.me.role==='owner'||S.me.role==='cashier')}
-function roleLabel(){return S.me&&S.me.role==='owner'?'মালিক':S.me&&S.me.role==='cashier'?'ক্যাশিয়ার':'শেফ'}
+function roleLabel(){return S.me&&S.me.role==='owner'?'মালিক':S.me&&S.me.roleName?S.me.roleName:S.me&&S.me.role==='cashier'?'ক্যাশিয়ার':'শেফ'}
 function topHTML(out){
   return '<header class="top"><div class="top-in wrap"><div class="tt"><span class="rn" id="rname">'+esc(rname())+'</span><span class="who" id="who">'+(S.me?esc(roleLabel()+' · '+S.me.name):'বাজারের হিসাব')+'</span></div>'+(out?'<button class="ghost" id="logout" type="button">বের হন</button>':'')+'</div></header>';
 }
@@ -513,6 +521,8 @@ var TABS={
 function mountApp(){
   var owner=S.me.role==='owner';
   var keys=owner?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:(S.me.role==='cashier'?['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team']:['send','prod','mine','partyc']);
+  if(!owner&&S.me.pTabs){var kf=keys.filter(function(k){return S.me.pTabs.indexOf(k)>=0});if(kf.length)keys=kf}
+  document.body.classList.toggle('noadd',!canAdd());
   if(keys.indexOf(S.tab)<0)S.tab=keys[0];
   app.innerHTML=topHTML(true)+(S.db?'':'<div class="banner"><div class="wrap"><p>এখানে ডেটা সেভ হচ্ছে না। পেজ বন্ধ করলে সব মুছে যাবে। সাইন ইন করা অবস্থায় খুলুন।</p></div></div>')+
     '<main class="wrap" id="view"></main><nav class="tabs" aria-label="মেনু"><div class="tabs-in wrap" id="tabs"></div></nav>';
@@ -552,7 +562,7 @@ function payChip(e){
   return '<span class="chip">নগদ</span>';
 }
 function rowHTML(e,who){
-  var owner=S.me.role==='owner';
+  var owner=canEd();
   var sub=[qtyFmt(e.qty)+' '+esc(e.unit),e.shop?esc(e.shop):'',who?esc(e.chefName||e.byName||e.by):'',e.edited?'বদলানো':''].filter(Boolean).join(' · ');
   var payBtn=(owner&&e.pay==='due'&&!e.paid)?'<button class="mini" type="button" data-paid="'+e.id+'">পরিশোধ</button>':'';
   var editBtn=owner?'<button class="mini" type="button" data-edit="'+e.id+'">বদলান</button>':'';
@@ -988,7 +998,7 @@ function updKharch(){
   $('#xList').innerHTML='<ul class="rows">'+list.map(function(x){
     var sub=dayLabel(x.date)+(x.edited?' · বদলানো':'')+(x.payId?' · বেতন ট্যাব থেকে':'');
     return '<li class="row" style="flex-wrap:wrap"><div class="r-main"><span class="r-item">'+esc(x.cat)+(x.title?' · '+esc(x.title):'')+'</span><span class="r-sub">'+sub+'</span></div>'+
-      '<div class="r-end"><span class="amt">'+money(x.amount)+'</span><div class="r-act">'+(S.me.role==='owner'&&!x.payId?'<button class="mini" type="button" data-xedit="'+esc(x.id)+'">বদলান</button>':'')+'</div></div>'+
+      '<div class="r-end"><span class="amt">'+money(x.amount)+'</span><div class="r-act">'+(canEd()&&!x.payId?'<button class="mini" type="button" data-xedit="'+esc(x.id)+'">বদলান</button>':'')+'</div></div>'+
       '<form class="xform" data-xform="'+esc(x.id)+'" hidden autocomplete="off"><input class="xf_date" type="date" value="'+esc(x.date)+'" aria-label="তারিখ"><select class="xf_cat" aria-label="কিসের খরচ">'+xCatOpts(x.cat)+'</select><input class="xf_title" value="'+esc(x.title||'')+'" placeholder="নাম বা বিবরণ" aria-label="নাম বা বিবরণ"><input class="xf_amt" type="number" inputmode="decimal" step="any" min="0" value="'+esc(x.amount)+'" aria-label="টাকা"><button class="mini" type="submit">সেভ করুন</button></form></li>';
   }).join('')+'</ul>';
 }
@@ -1099,7 +1109,7 @@ function mountPayroll(v){
 }
 function updPayroll(){
   var L=$('#pyList');if(!L)return;
-  var m=S.pm,owner=S.me.role==='owner';
+  var m=S.pm,owner=canEd();
   // keep what is being typed
   var of=L.querySelector('.pyform');
   if(of&&S.payOpen===of.dataset.pyform)S.payDraft={id:of.dataset.pyform,kind:of.querySelector('.pf_kind').value,amt:of.querySelector('.pf_amt').value,date:of.querySelector('.pf_date').value,note:of.querySelector('.pf_note').value};
@@ -1127,11 +1137,11 @@ function updPayroll(){
     var sub=[st.post?esc(st.post):'',st.off?'বন্ধ':''].filter(Boolean).join(' · ');
     return '<section class="card"><div class="sec-h"><h2>'+esc(st.name)+'</h2>'+chip+'</div>'+(sub?'<p class="r-sub" style="margin:0">'+sub+'</p>':'')+calc+
       '<div class="r-act" style="margin-top:10px;flex-wrap:wrap"><button class="mini" type="button" data-pyopen="'+esc(st.id)+'">'+(open?'বন্ধ করুন':'টাকা লিখুন')+'</button><button class="mini" type="button" data-pyhist="'+esc(st.id)+'">'+(hist?'হিসাব লুকান':'হিসাব দেখুন')+'</button>'+
-      (owner?'<button class="mini" type="button" data-pyedit="'+esc(st.id)+'">বদলান</button><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">'+(st.off?'চালু করুন':'ছেড়ে গেছে')+'</button><button class="mini" type="button" data-pydel="'+esc(st.id)+'">মুছুন</button>':'')+'</div>'+form+eform+h+'</section>';
+      (owner?'<button class="mini" type="button" data-pyedit="'+esc(st.id)+'">বদলান</button><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">'+(st.off?'চালু করুন':'ছেড়ে গেছে')+'</button>'+(S.me.role==='owner'?'<button class="mini" type="button" data-pydel="'+esc(st.id)+'">মুছুন</button>':''):'')+'</div>'+form+eform+h+'</section>';
   });
   // staff that are inactive this month but closed: allow reopening
   var closed=S.staff.filter(function(st){return !staffActive(st,m)&&st.off}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'bn')});
-  var cl=(owner&&closed.length)?'<section class="card"><h2>ছেড়ে যাওয়া</h2><ul class="rows">'+closed.map(function(st){return '<li class="row"><div class="r-main"><span class="r-item">'+esc(st.name)+'</span><span class="r-sub">'+esc(st.post||'')+(st.offMonth?' · '+mLabel(st.offMonth)+' পর্যন্ত':'')+'</span></div><div class="r-act"><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">চালু করুন</button><button class="mini" type="button" data-pydel="'+esc(st.id)+'">মুছুন</button></div></li>'}).join('')+'</ul></section>':'';
+  var cl=(owner&&closed.length)?'<section class="card"><h2>ছেড়ে যাওয়া</h2><ul class="rows">'+closed.map(function(st){return '<li class="row"><div class="r-main"><span class="r-item">'+esc(st.name)+'</span><span class="r-sub">'+esc(st.post||'')+(st.offMonth?' · '+mLabel(st.offMonth)+' পর্যন্ত':'')+'</span></div><div class="r-act"><button class="mini" type="button" data-pyoff="'+esc(st.id)+'">চালু করুন</button>'+(S.me.role==='owner'?'<button class="mini" type="button" data-pydel="'+esc(st.id)+'">মুছুন</button>':'')+'</div></li>'}).join('')+'</ul></section>':'';
   $('#pyStats').innerHTML='<div class="stat hl"><small>মোট বেতন</small><b>'+money(tb)+'</b></div><div class="stat"><small>দেওয়া হয়েছে</small><b>'+money(tp)+'</b></div><div class="stat"><small>বাকি</small><b>'+money(td)+'</b></div><div class="stat"><small>বোনাস/ওভারটাইম</small><b>'+money(tbo)+'</b></div>';
   L.innerHTML=(cards.join('')||'<section class="card"><p class="empty">'+(S.staff.length?'এই মাসে কোনো কর্মচারী নেই।':'এখনো কোনো কর্মচারী নেই। নিচের ফর্মে প্রথম কর্মচারী যোগ করুন।')+'</p></section>')+cl;
 }
@@ -1310,7 +1320,7 @@ function mountParty(v){
   });
 }
 function bkCardHTML(b){
-  var owner=S.me.role==='owner',tot=bkTotal(b),paid=bkPaid(b),due=bkDue(b);
+  var owner=canEd(),tot=bkTotal(b),paid=bkPaid(b),due=bkDue(b);
   var open=S.bOpen===b.id,hist=S.bHist===b.id,edit=S.bEdit===b.id;
   var n=todayDiff(b.date),upcoming=b.status==='booked'||b.status==='confirmed';
   var chip='<span class="chip '+(b.status==='cancelled'?'due':b.status==='done'?'paid':b.status==='confirmed'?'mobile':'')+'">'+PSTAT[b.status||'booked']+'</span>';
@@ -1410,7 +1420,7 @@ function updBikri(){
       html+='<div class="grp"><span>'+dayLabel(d)+'</span><span>'+money(sum(day,function(y){return y.amount}))+'</span></div><ul class="rows">';
     }
     html+='<li class="row" style="flex-wrap:wrap"><div class="r-main"><span class="r-item">'+esc(VMODES[x.mode]||x.mode)+(x.note?' · '+esc(x.note):'')+'</span><span class="r-sub">'+esc(x.byName||'')+(x.edited?' · বদলানো':'')+'</span></div>'+
-      '<div class="r-end"><span class="amt">'+money(x.amount)+'</span><div class="r-act">'+(S.me.role==='owner'&&!x.payId?'<button class="mini" type="button" data-vedit="'+esc(x.id)+'">বদলান</button>':'')+'</div></div>'+
+      '<div class="r-end"><span class="amt">'+money(x.amount)+'</span><div class="r-act">'+(canEd()&&!x.payId?'<button class="mini" type="button" data-vedit="'+esc(x.id)+'">বদলান</button>':'')+'</div></div>'+
       '<form class="vform" data-vform="'+esc(x.id)+'" hidden autocomplete="off"><input class="vf_date" type="date" value="'+esc(x.date)+'" aria-label="তারিখ"><select class="vf_mode" aria-label="কীভাবে">'+vModeOpts(x.mode)+'</select><input class="vf_amt" type="number" inputmode="decimal" step="any" min="0" value="'+esc(x.amount)+'" aria-label="টাকা"><input class="vf_note" value="'+esc(x.note||'')+'" placeholder="নোট" aria-label="নোট"><button class="mini" type="submit">সেভ করুন</button></form></li>';
   });
   $('#vList').innerHTML=html+'</ul>';
@@ -1708,7 +1718,7 @@ function updLists(){
   }
   var ls=S.lists.slice().sort(function(a,b){return (openList(b)?1:0)-(openList(a)?1:0)||byListNew(a,b)});
   if(!ls.length){el.innerHTML='<section class="card"><h2>শেফের লিস্ট</h2><p class="empty">শেফ লিস্ট পাঠালে এখানে দেখা যাবে। প্রতিটা জিনিসে "দাম লিখুন" চাপলে এন্ট্রি হয়ে যাবে। আগে "সেটআপ" ট্যাব থেকে দোকান, প্রোডাক্ট আর শেফের আইডি বানান।</p></section>';return}
-  el.innerHTML=ls.slice(0,40).map(function(l){return listCardHTML(l,true,S.me.role!=='owner')}).join('');
+  el.innerHTML=ls.slice(0,40).map(function(l){return listCardHTML(l,true,!canEd())}).join('');
 }
 
 /* ---------- tab: report (owner) ---------- */
@@ -1880,8 +1890,28 @@ function mountTeam(v){
   '<div class="f"><label for="t_id">আইডি</label><input id="t_id" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="ইংরেজি অক্ষর বা সংখ্যা, যেমন chef1" required></div>'+
   '<div class="f"><label for="t_pin">পিন</label><input id="t_pin" type="password" inputmode="numeric" maxlength="6" placeholder="৪ থেকে ৬ সংখ্যা" required></div>'+
   '<button class="btn" id="t_save" type="submit">আইডি বানান</button></form></section>'+
+  '<section class="card"><h2>রোল ও অনুমতি</h2><p class="hint">এখানে নিজের মতো রোল বানান। কোন ট্যাব দেখবে আর কী কী করতে পারবে ঠিক করুন। তারপর নিচে প্রতিটি আইডিতে রোল বসান।</p><div id="roleList"></div><form id="rf" autocomplete="off"><div class="f"><label for="r_name">রোলের নাম</label><input id="r_name" placeholder="যেমন: ম্যানেজার, ওয়েটার" required></div><div class="f"><label for="r_fam">ধরন</label><select id="r_fam"><option value="office">অফিস (টাকার হিসাবের ট্যাব)</option><option value="kitchen">রান্নাঘর (শেফের মতো, টাকা দেখে না)</option></select></div><div class="f"><label>কোন কোন ট্যাব দেখবে</label><div class="rolebox" id="r_tabs"></div></div><div class="rolebox" id="r_opts"><label><input type="checkbox" id="r_add" checked> নতুন এন্ট্রি লিখতে পারবে</label><label><input type="checkbox" id="r_edit"> বদলাতে ও বাতিল করতে পারবে</label></div><button class="btn" id="r_save" type="submit">রোল সেভ করুন</button> <button class="mini" id="r_cancel" type="button" hidden>বাতিল</button></form></section>'+
   '<section class="card"><h2>সবার আইডি</h2><p class="hint">কোনো আইডি মোছা যায় না। দরকার না হলে "বন্ধ করুন" চাপলে সে আর ঢুকতে পারবে না। শেফ পিন ভুলে গেলে আইডি বন্ধ করে নতুন আইডি বানান।</p><div id="uList"></div></section>';
-  $('#tf').addEventListener('submit',async function(ev){
+    setupRoles();
+  $('#uList').addEventListener('click',async function(ev){
+    var b=ev.target.closest('[data-uperm],[data-upsave]');if(!b)return;
+    try{
+      if(b.dataset.uperm){S.permOpen=S.permOpen===b.dataset.uperm?null:b.dataset.uperm;S.permDraft=null;updTeam()}
+      else{
+        var uid=b.dataset.upsave,u=S.users[uid],box=b.closest('[data-upbox]');if(!u||!box||u.role==='owner')return;
+        var tabs=Array.prototype.map.call(box.querySelectorAll('.up_tab'),function(c){return c.checked?c.value:null}).filter(Boolean);
+        if(!tabs.length){toast('অন্তত একটি ট্যাব বেছে নিন',true);return}
+        var kit=u.role==='chef',add=box.querySelector('.up_add'),ed=box.querySelector('.up_edit');
+        await patch('users',uid,{pTabs:tabs,pAdd:kit?true:(add?add.checked:true),pEdit:kit?false:(ed?ed.checked:false),roleId:null,roleName:null,custom:true});
+        S.permOpen=null;S.permDraft=null;toast('অনুমতি সেভ হয়েছে। ওই আইডি আবার লগইন করলে কাজ করবে');updTeam();
+      }
+    }catch(e){toast(errMsg(e),true)}
+  });
+  $('#uList').addEventListener('change',async function(ev){
+    var sel=ev.target.closest('[data-urole]');if(!sel)return;
+    try{await patch('users',sel.dataset.urole,roleFields(sel.value));toast('রোল বদলানো হয়েছে। ওই আইডি আবার লগইন করলে কাজ করবে')}catch(e){toast(errMsg(e),true)}
+  });
+$('#tf').addEventListener('submit',async function(ev){
     ev.preventDefault();
     var name=$('#t_name').value.trim(),id=normId($('#t_id').value),pin=$('#t_pin').value.trim();
     if(!name){toast('নাম লিখুন',true);return}
@@ -1894,20 +1924,92 @@ function mountTeam(v){
       var cred=await sa.createUserWithEmailAndPassword(toEmail(id),toPass(pin));
       var uid=cred.user.uid;
       await sa.signOut();
-      await put('users',uid,{loginId:id,name:name,role:$('#t_role').value==='cashier'?'cashier':'chef',active:true,created:Date.now()});
+      await put('users',uid,Object.assign({loginId:id,name:name,active:true,created:Date.now()},roleFields($('#t_role').value)));
       $('#t_name').value='';$('#t_id').value='';$('#t_pin').value='';toast('আইডি বানানো হয়েছে');
     }catch(e){toast(e&&e.code==='auth/email-already-in-use'?'এই আইডি আগেই আছে':errMsg(e),true)}
     var b=$('#t_save');if(b)b.disabled=false;
   });
 }
+
+var OFFICE_TABS=['lists','entry','book','report','baki','kharch','payroll','bikri','party','hisab','team'];
+var KITCHEN_TABS=['send','prod','mine','partyc'];
+function roleFields(val){
+  var r=null;if(String(val).indexOf('r:')===0)r=(S.roles||[]).filter(function(x){return 'r:'+x.id===val})[0];
+  if(!r)return {role:val==='cashier'?'cashier':'chef',roleId:null,roleName:null,pTabs:null,pAdd:true,pEdit:false,custom:false};
+  return {role:r.family==='kitchen'?'chef':'cashier',roleId:r.id,roleName:r.name,custom:false,pTabs:r.tabs||[],pAdd:r.add!==false,pEdit:r.family==='kitchen'?false:r.edit===true};
+}
+function uRoleVal(u){return u.custom&&!u.roleId?'custom':u.roleId?'r:'+u.roleId:(u.role==='cashier'?'cashier':'chef')}
+function roleOpts(sel){
+  var o=(sel==='custom'?'<option value="custom" disabled>আলাদা অনুমতি</option>':'')+'<option value="chef">শেফ (ডিফল্ট)</option><option value="cashier">ক্যাশিয়ার (ডিফল্ট)</option>'+(S.roles||[]).map(function(r){return '<option value="r:'+esc(r.id)+'">'+esc(r.name)+'</option>'}).join('');
+  return o.replace('value="'+sel+'"','value="'+sel+'" selected');
+}
+function rTabsHTML(fam,chk){
+  var ks=fam==='kitchen'?KITCHEN_TABS:OFFICE_TABS;
+  return ks.map(function(k){return '<label><input type="checkbox" class="r_tab" value="'+k+'"'+(!chk||chk.indexOf(k)>=0?' checked':'')+'> '+esc(k==='team'?'সেটআপ':TABS[k].t)+'</label>'}).join('');
+}
+function setupRoles(){
+  var fam=$('#r_fam');
+  var draw=function(chk){$('#r_tabs').innerHTML=rTabsHTML(fam.value,chk);$('#r_opts').hidden=fam.value==='kitchen'};
+  draw(null);
+  fam.addEventListener('change',function(){draw(null)});
+  $('#roleList').addEventListener('click',async function(ev){
+    var b=ev.target.closest('[data-redit],[data-rdel]');if(!b)return;
+    try{
+      if(b.dataset.redit){
+        var r=S.roles.filter(function(x){return x.id===b.dataset.redit})[0];if(!r)return;
+        S.roleEdit=r.id;$('#r_name').value=r.name;fam.value=r.family;draw(r.tabs||[]);$('#r_add').checked=r.add!==false;$('#r_edit').checked=r.edit===true;
+        $('#r_save').textContent='রোল বদলান';$('#r_cancel').hidden=false;$('#r_name').focus();
+      }else{
+        if(!arm(b,'নিশ্চিত?'))return;
+        await S.db.doc('roles/'+b.dataset.rdel).delete();toast('রোল মুছে গেছে। যাদের এই রোল ছিল তাদের অনুমতি আগের মতোই থাকবে');
+      }
+    }catch(e){toast(errMsg(e),true)}
+  });
+  $('#r_cancel').addEventListener('click',function(){S.roleEdit=null;$('#rf').reset();draw(null);$('#r_save').textContent='রোল সেভ করুন';$('#r_cancel').hidden=true});
+  $('#rf').addEventListener('submit',async function(ev){
+    ev.preventDefault();
+    var name=$('#r_name').value.trim(),f=fam.value;
+    var tabs=Array.prototype.map.call($$('.r_tab'),function(c){return c.checked?c.value:null}).filter(Boolean);
+    if(!name){toast('রোলের নাম লিখুন',true);return}
+    if(!tabs.length){toast('অন্তত একটি ট্যাব বেছে নিন',true);return}
+    var id=S.roleEdit||Date.now().toString(36)+rnd().slice(0,4);
+    var rec={name:name,family:f,tabs:tabs,add:f==='kitchen'?true:$('#r_add').checked,edit:f==='kitchen'?false:$('#r_edit').checked,ts:Date.now()};
+    try{
+      var ops=[{c:'roles',id:id,d:rec}];
+      if(S.roleEdit){var nr=Object.assign({id:id},rec);Object.keys(S.users).forEach(function(uid){if(S.users[uid].roleId===id){var fl=roleFields('r:'+id);var t=(S.roles||[]).filter(function(x){return x.id===id});var tmp=S.roles;S.roles=[nr].concat(tmp.filter(function(x){return x.id!==id}));fl=roleFields('r:'+id);S.roles=tmp;ops.push({c:'users',id:uid,u:true,d:fl})}})}
+      await multi(ops);
+      S.roleEdit=null;$('#rf').reset();draw(null);$('#r_save').textContent='রোল সেভ করুন';$('#r_cancel').hidden=true;toast('রোল সেভ হয়েছে');
+    }catch(e){toast(errMsg(e),true)}
+  });
+}
+function updRoles(){
+  var l=$('#roleList');if(!l)return;
+  l.innerHTML=(S.roles||[]).length?(S.roles.map(function(r){
+    return '<div class="urow"><div class="uinfo"><b>'+esc(r.name)+'</b><span class="r-sub">'+(r.family==='kitchen'?'রান্নাঘর':'অফিস')+' · '+(r.tabs||[]).length+'টি ট্যাব'+(r.family==='kitchen'?'':(r.add===false?' · এন্ট্রি লিখতে পারে না':' · এন্ট্রি লিখতে পারে')+(r.edit?' · বদলাতে পারে':''))+'</span></div><div class="r-act"><button class="mini" type="button" data-redit="'+esc(r.id)+'">বদলান</button><button class="mini" type="button" data-rdel="'+esc(r.id)+'">মুছুন</button></div></div>'}).join('')):'<p class="empty">এখনো কোনো রোল নেই।</p>';
+}
+function permBox(id,u){
+  if(u.role==='owner'||S.permOpen!==id)return '';
+  var kit=u.role==='chef',dr=S.permDraft&&S.permDraft.id===id?S.permDraft:null;
+  var cur=dr?dr.tabs:(Array.isArray(u.pTabs)?u.pTabs:(kit?KITCHEN_TABS:OFFICE_TABS));
+  var add=dr?dr.add:u.pAdd!==false,ed=dr?dr.edit:u.pEdit===true;
+  var tabs=(kit?KITCHEN_TABS:OFFICE_TABS).map(function(k){return '<label><input type="checkbox" class="up_tab" value="'+k+'"'+(cur.indexOf(k)>=0?' checked':'')+'> '+esc(k==='team'?'সেটআপ':TABS[k].t)+'</label>'}).join('');
+  return '<div class="permbox" data-upbox="'+esc(id)+'"><b>কোন ট্যাব দেখবে</b><div class="rolebox">'+tabs+'</div>'+
+    (kit?'':'<b>কী করতে পারবে</b><div class="rolebox"><label><input type="checkbox" class="up_add"'+(add?' checked':'')+'> নতুন এন্ট্রি লিখতে পারবে</label><label><input type="checkbox" class="up_edit"'+(ed?' checked':'')+'> বদলাতে ও বাতিল করতে পারবে</label></div>')+
+    '<button class="btn" type="button" data-upsave="'+esc(id)+'">অনুমতি সেভ করুন</button></div>';
+}
 function updTeam(){
   var l=$('#uList');if(!l)return;
+  var ts=$('#t_role');if(ts){var tv=ts.value;ts.innerHTML=roleOpts(tv||'chef');}
+  updRoles();
+  var ob=l.querySelector('[data-upbox]');
+  if(ob&&S.permOpen===ob.dataset.upbox)S.permDraft={id:ob.dataset.upbox,tabs:Array.prototype.map.call(ob.querySelectorAll('.up_tab:checked'),function(c){return c.value}),add:(ob.querySelector('.up_add')||{}).checked,edit:(ob.querySelector('.up_edit')||{}).checked};
   var ids=Object.keys(S.users).sort(function(a,b){return (S.users[a].role==='owner'?0:1)-(S.users[b].role==='owner'?0:1)||String(S.users[a].loginId).localeCompare(String(S.users[b].loginId))});
   l.innerHTML=ids.map(function(id){
     var u=S.users[id],own=u.role==='owner',self=id===S.me.id,off=u.active===false;
-    return '<div class="urow"><div class="uinfo"><b>'+esc(u.name)+(off?' · বন্ধ':'')+'</b><span class="r-sub">আইডি: '+esc(u.loginId)+' · '+(own?'মালিক':u.role==='cashier'?'ক্যাশিয়ার':'শেফ')+'</span></div><div class="r-act">'+
+    return '<div class="urow"><div class="uinfo"><b>'+esc(u.name)+(off?' · বন্ধ':'')+'</b><span class="r-sub">আইডি: '+esc(u.loginId)+' · '+(own?'মালিক':u.roleName||(u.role==='cashier'?'ক্যাশিয়ার':'শেফ'))+'</span></div><div class="r-act">'+(own?'':'<select data-urole="'+esc(id)+'" aria-label="রোল">'+roleOpts(uRoleVal(u))+'</select>')+
       (self?'<button class="mini" type="button" data-pintoggle="'+esc(id)+'">পিন বদলান</button>':'')+
-      (own?'':'<button class="mini" type="button" data-uoff="'+esc(id)+'">'+(off?'চালু করুন':'বন্ধ করুন')+'</button>')+'</div>'+
+      (own?'':'<button class="mini" type="button" data-uperm="'+esc(id)+'">অনুমতি</button>')+
+      (own?'':'<button class="mini" type="button" data-uoff="'+esc(id)+'">'+(off?'চালু করুন':'বন্ধ করুন')+'</button>')+'</div>'+permBox(id,u)+
       (self?'<form class="pinform" data-pinform="'+esc(id)+'" hidden><input type="password" inputmode="numeric" maxlength="6" placeholder="নতুন পিন" aria-label="নতুন পিন"><button class="mini" type="submit">সেভ</button></form>':'')+'</div>';
   }).join('');
 }
@@ -1947,7 +2049,7 @@ function updShops(){
   var shops=S.shops.slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name),'bn')});
   $('#shCount').textContent=shops.length+'টি';
   l.innerHTML=shops.length?'<ul class="rows">'+shops.map(function(s){
-    return '<li class="row"><div class="r-main"><span class="r-item">'+esc(s.name)+(s.off?' · বন্ধ':'')+'</span></div>'+(S.me.role==='owner'?'<div class="r-act"><button class="mini" type="button" data-shoff="'+esc(s.id)+'">'+(s.off?'চালু করুন':'বন্ধ করুন')+'</button></div>':'')+'</li>';
+    return '<li class="row"><div class="r-main"><span class="r-item">'+esc(s.name)+(s.off?' · বন্ধ':'')+'</span></div>'+(canEd()?'<div class="r-act"><button class="mini" type="button" data-shoff="'+esc(s.id)+'">'+(s.off?'চালু করুন':'বন্ধ করুন')+'</button></div>':'')+'</li>';
   }).join('')+'</ul>':'<p class="empty">এখনো কোনো দোকান নেই। উপরে প্রথম দোকানের নাম লিখে যোগ করুন।</p>';
 }
 
@@ -1993,8 +2095,8 @@ function updProducts(){
       var uo=UNITS.map(function(u){return '<option'+(u===p.unit?' selected':'')+'>'+u+'</option>'}).join('');
       var bs=buyStatus(p);
       return '<li class="row" style="flex-wrap:wrap"><div class="r-main"><span class="r-item">'+esc(p.name)+(p.off?' · বন্ধ':'')+'</span><span class="r-sub">'+(+p.price>0?money(p.price)+' / '+esc(p.unit):'দাম লেখা নেই · '+esc(p.unit))+(p.shop?' · '+esc(p.shop):'')+(bs.sub?' · '+bs.sub:'')+'</span><span>'+bs.chip+'</span></div>'+
-        (S.me.role==='owner'?'<div class="r-act"><button class="mini" type="button" data-pdtoggle="'+esc(p.id)+'">বদলান</button><button class="mini" type="button" data-poff="'+esc(p.id)+'">'+(p.off?'চালু করুন':'বন্ধ করুন')+'</button></div>':'')+
-        (S.me.role==='owner'?'<form class="pform" data-pform="'+esc(p.id)+'" hidden><select class="pf_cat" aria-label="ধরন">'+catOpts(p.cat||'অন্যান্য',true)+'</select><input class="pf_catnew" placeholder="নতুন ধরনের নাম" hidden aria-label="নতুন ধরন"><input class="pf_price" type="number" inputmode="decimal" step="any" min="0" value="'+(+p.price||'')+'" aria-label="দাম"><select class="pf_unit" aria-label="একক">'+uo+'</select><select class="pf_shop" aria-label="দোকান">'+so+'</select><button class="mini" type="submit">সেভ করুন</button></form>':'')+'</li>';
+        (canEd()?'<div class="r-act"><button class="mini" type="button" data-pdtoggle="'+esc(p.id)+'">বদলান</button><button class="mini" type="button" data-poff="'+esc(p.id)+'">'+(p.off?'চালু করুন':'বন্ধ করুন')+'</button></div>':'')+
+        (canEd()?'<form class="pform" data-pform="'+esc(p.id)+'" hidden><select class="pf_cat" aria-label="ধরন">'+catOpts(p.cat||'অন্যান্য',true)+'</select><input class="pf_catnew" placeholder="নতুন ধরনের নাম" hidden aria-label="নতুন ধরন"><input class="pf_price" type="number" inputmode="decimal" step="any" min="0" value="'+(+p.price||'')+'" aria-label="দাম"><select class="pf_unit" aria-label="একক">'+uo+'</select><select class="pf_shop" aria-label="দোকান">'+so+'</select><button class="mini" type="submit">সেভ করুন</button></form>':'')+'</li>';
     }).join('')+'</ul>';
   });
   l.innerHTML=html;
