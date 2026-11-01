@@ -135,6 +135,23 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .noadd #ef,.noadd #xf,.noadd #stf,.noadd #pbf,.noadd #vf,.noadd #shf,.noadd #pdf{display:none}
 .rolebox{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:6px 0 12px}
 
+.rfilter .presets{flex-wrap:nowrap;overflow-x:auto;margin:12px -4px 4px;padding:2px 4px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.rfilter .presets::-webkit-scrollbar{display:none}
+.rfilter .presets .mini{border-radius:999px;min-height:40px;padding:0 16px;white-space:nowrap;flex:none;background:var(--field);transition:background .15s,color .15s}
+.rfilter .presets .mini.on{background:var(--brand);border-color:var(--brand);color:var(--on-brand);font-weight:700}
+.rfilter .filt .f label{font-size:13px;color:var(--mute);font-weight:600}
+.rfilter select,.rfilter input[type=date]{border-radius:12px;min-height:48px}
+.rstat{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+.rs{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.rs small{font-size:12px;color:var(--mute);font-weight:600}
+.rs b{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.rs.hl{background:var(--brand);border-color:var(--brand)}
+.rs.hl small,.rs.hl b{color:var(--on-brand)}
+.r-empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:26px 8px 20px;color:var(--mute);text-align:center}
+.r-empty p{margin:6px 0 0;font-weight:700;color:var(--ink);font-size:16px}
+.r-empty span{font-size:14px}
+#rSum{display:none}
+
 .lcard{padding:14px 14px 6px}
 .lc-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .lc-t{display:flex;flex-direction:column;min-width:0}
@@ -260,6 +277,13 @@ main.wrap{gap:14px}
 .eform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}
 .eform .ef_item,.eform .ef_shop,.eform .mini{grid-column:1/-1}
 .eform .mini{min-height:44px}
+
+.row.ent{flex-direction:column;gap:5px;padding:16px 0}
+.e-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.e-top .r-item{font-size:17.5px;line-height:1.3}
+.e-top .amt{font-size:19px;color:var(--ink)}
+.e-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap}
+.e-foot .r-act .mini{min-height:36px;padding:0 15px}
 </style></head><body>
 
 <div id="app"></div>
@@ -591,7 +615,7 @@ function rowHTML(e,who){
   var sub=[qtyFmt(e.qty)+' '+esc(e.unit),e.shop?esc(e.shop):'',who?esc(e.chefName||e.byName||e.by):'',e.edited?'বদলানো':''].filter(Boolean).join(' · ');
   var payBtn=(owner&&e.pay==='due'&&!e.paid)?'<button class="mini" type="button" data-paid="'+e.id+'">পরিশোধ</button>':'';
   var editBtn=owner?'<button class="mini" type="button" data-edit="'+e.id+'">বদলান</button>':'';
-  return '<li class="row" style="flex-wrap:wrap"><div class="r-main"><span class="r-item">'+esc(e.item)+'</span><span class="r-sub">'+sub+'</span><span>'+payChip(e)+'</span></div><div class="r-end"><span class="amt">'+money(e.amount)+'</span><div class="r-act">'+payBtn+editBtn+'</div></div>'+(owner?editFormHTML(e):'')+'</li>';
+  return '<li class="row ent"><div class="e-top"><span class="r-item">'+esc(e.item)+'</span><span class="amt">'+money(e.amount)+'</span></div><span class="r-sub">'+sub+'</span><div class="e-foot"><span>'+payChip(e)+'</span>'+((payBtn||editBtn)?'<div class="r-act">'+payBtn+editBtn+'</div>':'')+'</div>'+(owner?editFormHTML(e):'')+'</li>';
 }
 function editFormHTML(e){
   var shops=S.shops.filter(function(s){return !s.off}).map(function(s){return s.name});
@@ -1755,24 +1779,28 @@ var RTYPES=[['day','দিন অনুযায়ী','দিন'],['month','�
 function payLabel(e){return e.pay==='due'?(e.paid?'বাকি (পরিশোধ)':'বাকি'):(PAYS[e.pay]||e.pay)}
 function mountReport(v){
   if(!S.r){var t=todayISO();S.r={from:t.slice(0,8)+'01',to:t,type:'day'}}
-  v.innerHTML='<section class="card"><h2>রিপোর্ট</h2>'+
+  v.innerHTML='<section class="card rfilter"><h2>রিপোর্ট</h2>'+
   '<div class="presets" role="group" aria-label="সময় বেছে নিন">'+[['today','আজ'],['7','৭ দিন'],['month','এই মাস'],['last','গত মাস'],['all','সব']].map(function(p){return '<button class="mini" type="button" data-preset="'+p[0]+'">'+p[1]+'</button>'}).join('')+'</div>'+
   '<div class="filt"><div class="f"><label for="r_from">থেকে</label><input id="r_from" type="date" value="'+S.r.from+'"></div>'+
   '<div class="f"><label for="r_to">পর্যন্ত</label><input id="r_to" type="date" value="'+S.r.to+'"></div>'+
   '<div class="f wide"><label for="r_type">কী ধরনের রিপোর্ট</label><select id="r_type">'+RTYPES.map(function(x){return '<option value="'+x[0]+'">'+x[1]+'</option>'}).join('')+'</select></div><div class="f wide" id="r_itemw" hidden><label for="r_item">কোন জিনিস</label><select id="r_item"></select></div></div></section>'+
-  '<section class="card"><div class="sec-h"><h2 id="rTitle"></h2><span class="sum" id="rSum"></span></div><div class="tw" id="rTable"></div>'+
+  '<div class="rstat" id="rStat"></div><section class="card"><div class="sec-h"><h2 id="rTitle"></h2><span class="sum" id="rSum"></span></div><div class="tw" id="rTable"></div>'+
   '<div class="acts" id="rActs"><button class="btn" type="button" id="rCsv" data-rcsv>CSV ডাউনলোড (Excel-এ খোলে)</button><button class="btn alt" type="button" data-rcopy>কপি করুন (হোয়াটসঅ্যাপ বা শিটে পেস্ট)</button></div></section>';
   $('#r_type').value=S.r.type;
   var read=function(){S.r.from=$('#r_from').value;S.r.to=$('#r_to').value;S.r.type=$('#r_type').value;S.r.item=$('#r_item').value;updReport()};
   $$('#r_from,#r_to,#r_type,#r_item').forEach(function(el){el.addEventListener('input',read)});
 }
-function presetRange(p){
+function rangeOf(p){
   var t=todayISO(),f=t,to=t;
   if(p==='7')f=addDays(t,-6);
   else if(p==='month')f=t.slice(0,8)+'01';
   else if(p==='last'){var q=t.split('-').map(Number);var a=new Date(q[0],q[1]-2,1),b=new Date(q[0],q[1]-1,0);f=a.getFullYear()+'-'+pad(a.getMonth()+1)+'-01';to=b.getFullYear()+'-'+pad(b.getMonth()+1)+'-'+pad(b.getDate())}
   else if(p==='all')f='';
-  S.r.from=f;S.r.to=to;$('#r_from').value=f;$('#r_to').value=to;updReport();
+  return [f,to];
+}
+function presetRange(p){
+  var r=rangeOf(p);
+  S.r.from=r[0];S.r.to=r[1];$('#r_from').value=r[0];$('#r_to').value=r[1];updReport();
 }
 function uniqItems(){
   var m={};
@@ -1901,10 +1929,12 @@ function updReport(){
   if(S.r.item&&items.some(function(x){return x.k===S.r.item}))it.value=S.r.item;else{S.r.item='';it.value=''}
   iw.hidden=S.r.type!=='price';
   if(rt.value!==S.r.type)rt.value=S.r.type;
+  $$('#view [data-preset]').forEach(function(b){var r=rangeOf(b.dataset.preset);b.classList.toggle('on',(S.r.from||'')===r[0]&&(S.r.to||'')===r[1])});
   var d=reportData();
   $('#rTitle').textContent=d.title;
   $('#rSum').textContent=d.count+'টি এন্ট্রি · '+money(d.total);
-  if(!d.rows.length){$('#rTable').innerHTML='<p class="empty">এই সময়ে কোনো এন্ট্রি নেই। তারিখ বা রিপোর্টের ধরন বদলে দেখুন।</p>';$('#rActs').hidden=true;return}
+  var sm=$('#rStat');if(sm)sm.innerHTML='<div class="rs hl"><small>মোট</small><b>'+money(d.total)+'</b></div><div class="rs"><small>এন্ট্রি</small><b>'+d.count+'টি</b></div>';
+  if(!d.rows.length){$('#rTable').innerHTML='<div class="r-empty"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><p>এই সময়ে কোনো এন্ট্রি নেই</p><span>তারিখ বা রিপোর্টের ধরন বদলে দেখুন</span></div>';$('#rActs').hidden=true;return}
   $('#rTable').innerHTML=S.r.type==='price'?priceHTML(d):tableHTML(d);
   $('#rActs').hidden=false;$('#rCsv').hidden=!S.dl;
 }
