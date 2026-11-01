@@ -134,6 +134,31 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .auth .card{display:flex;flex-direction:column;gap:6px}
 .noadd #ef,.noadd #xf,.noadd #stf,.noadd #pbf,.noadd #vf,.noadd #shf,.noadd #pdf{display:none}
 .rolebox{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:6px 0 12px}
+
+.lcard{padding:14px 14px 6px}
+.lc-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.lc-t{display:flex;flex-direction:column;min-width:0}
+.lc-t h2{font-size:18px;line-height:1.25}
+.lc-by{font-size:13px;color:var(--mute)}
+.lc-n{font-family:var(--display);font-weight:700;font-size:14px;padding:3px 11px;border-radius:999px;background:var(--soft);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lc-n.all{background:var(--ok-soft);color:var(--ok)}
+.lc-bar{height:6px;border-radius:99px;background:var(--soft);overflow:hidden;margin:10px 0 4px}
+.lc-bar i{display:block;height:100%;background:var(--brand);border-radius:99px;transition:width .3s}
+.li-list{list-style:none;margin:0;padding:0}
+.li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0 11px 12px;border-top:1px solid var(--line);position:relative}
+.li:first-child{border-top:0}
+.li::before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:4px;border-radius:4px;background:var(--hl)}
+.li.s-done::before{background:var(--ok)}
+.li.s-skip::before{background:var(--bad)}
+.li-main{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.li-top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.li-name{font-weight:700;font-size:17px;overflow-wrap:anywhere}
+.li-qty{font-size:13px;font-weight:600;color:var(--mute);background:var(--soft);padding:1px 9px;border-radius:999px;white-space:nowrap}
+.li-end{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
+.li-act{display:flex;gap:6px}
+.li-act .mini{min-height:38px;padding:0 12px;font-size:14px}
+.mini.pri{background:var(--brand);border-color:var(--brand);color:var(--on-brand);font-weight:600}
+.li.s-skip .li-name{color:var(--mute);text-decoration:line-through}
 .permbox{width:100%;margin-top:10px;padding:12px;border:1px solid var(--line,#d8ddd9);border-radius:12px;display:grid;gap:8px}.permbox b{font-size:14px}.rolebox label{display:flex;gap:8px;align-items:center;font-size:15px}.rolebox input{width:auto;min-height:0}
 .urow select{min-height:40px;max-width:200px}
 .urow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
@@ -1528,19 +1553,21 @@ async function setItemState(lid,iid,st,extra){
 }
 function listCardHTML(l,owner,ro){
   var items=l.items||[],done=items.filter(function(i){return i.st!=='open'}).length;
-  var head='<div class="sec-h"><h2>'+dayLabel(l.date)+'</h2><span class="sum">'+done+'/'+items.length+' শেষ</span></div>'+(owner?'<p class="mute" style="font-size:14px">'+esc(l.byName||l.by)+' পাঠিয়েছেন</p>':'');
+  var pct=items.length?Math.round(done*100/items.length):0;
+  var head='<div class="lc-h"><div class="lc-t"><h2>'+dayLabel(l.date)+'</h2>'+(owner?'<span class="lc-by">'+esc(l.byName||l.by)+' পাঠিয়েছেন</span>':'')+'</div><span class="lc-n'+(done===items.length&&items.length?' all':'')+'">'+done+'/'+items.length+'</span></div><div class="lc-bar" aria-hidden="true"><i style="width:'+pct+'%"></i></div>';
   var rows=items.map(function(i){
-    var sub=qtyFmt(i.qty)+' '+esc(i.unit)+(i.note?' · '+esc(i.note):'');
+    var qty=qtyFmt(i.qty)+' '+esc(i.unit);
     var acts='';
     if(owner){
-      if(i.st==='open')acts='<button class="mini" type="button" data-pick="'+l.id+'|'+i.id+'">দাম লিখুন</button><button class="mini" type="button" data-skip="'+l.id+'|'+i.id+'">কেনা হয়নি</button>';
+      if(i.st==='open')acts='<button class="mini pri" type="button" data-pick="'+l.id+'|'+i.id+'">দাম লিখুন</button><button class="mini" type="button" data-skip="'+l.id+'|'+i.id+'">কেনা হয়নি</button>';
       else if(i.st==='skip'&&!ro)acts='<button class="mini" type="button" data-reopen="'+l.id+'|'+i.id+'">আবার খুলুন</button>';
     }
     var amt=(owner&&i.st==='done'&&i.amt!=null)?'<span class="amt">'+money(i.amt)+'</span>':'';
-    return '<li class="row"><div class="r-main"><span class="r-item">'+esc(i.name)+'</span><span class="r-sub">'+sub+'</span><span>'+listState(i)+'</span></div><div class="r-end">'+amt+'<div class="r-act">'+acts+'</div></div></li>';
+    var showChip=!(owner&&i.st==='open');
+    return '<li class="li s-'+(i.st||'open')+'"><div class="li-main"><div class="li-top"><span class="li-name">'+esc(i.name)+'</span><span class="li-qty">'+qty+'</span>'+(showChip?listState(i):'')+'</div>'+(i.note?'<span class="r-sub">'+esc(i.note)+'</span>':'')+'</div>'+(amt||acts?'<div class="li-end">'+amt+(acts?'<div class="li-act">'+acts+'</div>':'')+'</div>':'')+'</li>';
   }).join('');
   var foot='';
-  return '<section class="card">'+head+'<ul class="rows">'+rows+'</ul>'+foot+'</section>';
+  return '<section class="card lcard">'+head+'<ul class="li-list">'+rows+'</ul>'+foot+'</section>';
 }
 function byListNew(a,b){return (b.date>a.date?1:b.date<a.date?-1:0)||((b.ts||0)-(a.ts||0))}
 
