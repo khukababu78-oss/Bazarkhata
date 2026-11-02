@@ -640,7 +640,7 @@ function arm(b,label){
   return false;
 }
 async function onViewClick(ev){
-  var b=ev.target.closest('[data-paid],[data-settle],[data-uoff],[data-pintoggle],[data-preset],[data-rcsv],[data-rcopy],[data-pick],[data-skip],[data-reopen],[data-pdtoggle],[data-poff],[data-shoff],[data-edit],[data-xedit],[data-vedit],[data-bkopen],[data-bkfull],button[data-bkhist],[data-tab-go]');
+  var b=ev.target.closest('[data-paid],[data-settle],[data-uoff],[data-pintoggle],[data-preset],[data-rcsv],[data-rcopy],[data-pick],[data-skip],[data-reopen],[data-rcv],[data-pdtoggle],[data-poff],[data-shoff],[data-edit],[data-xedit],[data-vedit],[data-bkopen],[data-bkfull],button[data-bkhist],[data-tab-go]');
   if(!b)return;
   try{
     if(b.dataset.vedit){var vf0=$('[data-vform="'+b.dataset.vedit+'"]');if(vf0)vf0.hidden=!vf0.hidden}
@@ -664,6 +664,7 @@ async function onViewClick(ev){
     else if(b.dataset.shoff){var ss=S.shops.find(function(x){return x.id===b.dataset.shoff});if(ss){await patch('shops',ss.id,{off:!ss.off});toast(ss.off?'দোকান চালু হয়েছে':'দোকান বন্ধ হয়েছে')}}
     else if(b.dataset.pick){var pr=b.dataset.pick.split('|');S.sel={l:pr[0],i:pr[1]};fillSel()}
     else if(b.dataset.skip){if(!arm(b,'নিশ্চিত?'))return;var sk=b.dataset.skip.split('|');await setItemState(sk[0],sk[1],'skip');toast('কেনা হয়নি লেখা হয়েছে')}
+    else if(b.dataset.rcv){var rc=b.dataset.rcv.split('|');await setRcv(rc[0],rc[1]);toast('পেয়েছি লেখা হয়েছে')}
     else if(b.dataset.reopen){var ro=b.dataset.reopen.split('|');await setItemState(ro[0],ro[1],'open')}
     else if(b.dataset.preset){presetRange(b.dataset.preset)}
     else if(b.dataset.rcsv!==undefined){await exportCsv()}
@@ -854,8 +855,8 @@ function mountEntry(v){
   $('#e_date').value=todayISO();
   $('#e_date').addEventListener('change',updEntry);
   var auto=true,price=0,punit='';
-  var recalc=function(){var q=parseFloat($('#e_qty').value);if(auto&&price>0&&q>0&&$('#e_unit').value===punit)$('#e_amt').value=r2(q*price)};
-  var hint=function(){$('#e_hint').textContent=price>0?'প্রতি '+punit+' ৳ '+price+' হিসাবে নিজে হিসাব হয়েছে। চাইলে বদলাতে পারেন।':''};
+  var recalc=function(){};
+  var hint=function(){$('#e_hint').textContent=''};
   $('#e_prod').addEventListener('change',function(){
     toggleOther(this,$('#e_ow'));
     var p=prodById(this.value);
@@ -1569,10 +1570,16 @@ async function setItemState(lid,iid,st,extra){
   var items=(l.items||[]).map(function(i){
     if(i.id!==iid)return i;
     var n=Object.assign({},i,{st:st});
-    if(st!=='done'){delete n.entryId;delete n.amt}
+    if(st!=='done'){delete n.entryId;delete n.amt;delete n.rcv;delete n.rcvAt;delete n.rcvBy}
     if(extra)Object.assign(n,extra);
     return n;
   });
+  await patch('lists',lid,{items:items});
+}
+async function setRcv(lid,iid){
+  var l=S.lists.find(function(x){return x.id===lid});if(!l)return;
+  var now=Date.now();
+  var items=(l.items||[]).map(function(i){return (i.id===iid&&i.st==='done'&&!i.rcv)?Object.assign({},i,{rcv:true,rcvAt:now,rcvBy:S.me.id}):i});
   await patch('lists',lid,{items:items});
 }
 function listCardHTML(l,owner,ro){
@@ -1586,9 +1593,11 @@ function listCardHTML(l,owner,ro){
       if(i.st==='open')acts='<button class="mini pri" type="button" data-pick="'+l.id+'|'+i.id+'">দাম লিখুন</button><button class="mini" type="button" data-skip="'+l.id+'|'+i.id+'">কেনা হয়নি</button>';
       else if(i.st==='skip'&&!ro)acts='<button class="mini" type="button" data-reopen="'+l.id+'|'+i.id+'">আবার খুলুন</button>';
     }
+    if(!owner&&i.st==='done'&&!i.rcv)acts='<button class="mini pri" type="button" data-rcv="'+l.id+'|'+i.id+'">পেয়েছি</button>';
     var amt=(owner&&i.st==='done'&&i.amt!=null)?'<span class="amt">'+money(i.amt)+'</span>':'';
+    var rcvChip=i.st==='done'?(i.rcv?'<span class="chip paid">রিসিভ হয়েছে</span>':(owner?'<span class="chip">রিসিভ বাকি</span>':'')):'';
     var showChip=!(owner&&i.st==='open');
-    return '<li class="li s-'+(i.st||'open')+'"><div class="li-main"><div class="li-top"><span class="li-name">'+esc(i.name)+'</span><span class="li-qty">'+qty+'</span>'+(showChip?listState(i):'')+'</div>'+(i.note?'<span class="r-sub">'+esc(i.note)+'</span>':'')+'</div>'+(amt||acts?'<div class="li-end">'+amt+(acts?'<div class="li-act">'+acts+'</div>':'')+'</div>':'')+'</li>';
+    return '<li class="li s-'+(i.st||'open')+'"><div class="li-main"><div class="li-top"><span class="li-name">'+esc(i.name)+'</span><span class="li-qty">'+qty+'</span>'+(showChip?listState(i):'')+rcvChip+'</div>'+(i.note?'<span class="r-sub">'+esc(i.note)+'</span>':'')+'</div>'+(amt||acts?'<div class="li-end">'+amt+(acts?'<div class="li-act">'+acts+'</div>':'')+'</div>':'')+'</li>';
   }).join('');
   var foot='';
   return '<section class="card lcard">'+head+'<ul class="li-list">'+rows+'</ul>'+foot+'</section>';
